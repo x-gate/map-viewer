@@ -1,6 +1,5 @@
 import { setEngine } from "./app/getEngine";
-import { LoadScreen } from "./app/screens/LoadScreen";
-import { MainScreen } from "./app/screens/main/MainScreen";
+import { AssetPickerScreen } from "./app/screens/AssetPickerScreen";
 import { userSettings } from "./app/utils/userSettings";
 import { CreationEngine } from "./engine/engine";
 
@@ -16,17 +15,13 @@ const engine = new CreationEngine();
 setEngine(engine);
 
 (async () => {
-  // Initialize the creation engine instance
   await engine.init({
     background: "#1E1E1E",
     resizeOptions: { minWidth: 768, minHeight: 1024, letterbox: false },
   });
 
-  // Initialize the user settings
   userSettings.init();
 
-  // Show the load screen
-  await engine.navigation.showScreen(LoadScreen);
-  // Show the main screen once the load screen is dismissed
-  await engine.navigation.showScreen(MainScreen);
+  // Show the asset picker — user provides their own CrossGate files
+  await engine.navigation.showScreen(AssetPickerScreen);
 })();

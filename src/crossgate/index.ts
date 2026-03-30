@@ -48,6 +48,13 @@ export {
   crossgateGraphicLoader,
   crossgateMapLoader,
 } from "./loader";
+export {
+  type CrossGateStore,
+  getStore,
+  isStoreReady,
+  initStore,
+  clearStore,
+} from "./store";
 
 import { extensions } from "pixi.js";
 import {
