@@ -10,6 +10,8 @@ import { ExtensionType, LoaderParserPriority, checkExtension } from "pixi.js";
 import type { LoaderParser } from "pixi.js";
 import type { GraphicInfoEntry } from "./graphic-info";
 import { parseGraphicInfo } from "./graphic-info";
+import type { MapData } from "./map";
+import { parseMap } from "./map";
 import type { Color } from "./palette";
 import { CGP_SIZE, parseCgpPalette } from "./palette";
 
@@ -83,3 +85,30 @@ export const crossgateCgpLoader = {
     return parseCgpPalette(data);
   },
 } satisfies LoaderParser<Color[]>;
+
+/** Loader for CrossGate map .dat files. Returns parsed MapData, or null for non-map .dat files. */
+export const crossgateMapLoader = {
+  extension: {
+    type: ExtensionType.LoadParser,
+    priority: LoaderParserPriority.High,
+    name: "crossgate-map",
+  },
+
+  id: "crossgate-map",
+  name: "crossgate-map",
+
+  test(url: string): boolean {
+    return checkExtension(url, [".dat"]);
+  },
+
+  async load(url: string): Promise<MapData | null> {
+    const response = await fetch(url);
+    const buffer = await response.arrayBuffer();
+    // Validate MAP magic before parsing; ignore non-map .dat files
+    const magic = new Uint8Array(buffer, 0, 3);
+    if (magic[0] !== 0x4d || magic[1] !== 0x41 || magic[2] !== 0x50) {
+      return null;
+    }
+    return parseMap(buffer);
+  },
+} satisfies LoaderParser<MapData | null>;

@@ -35,9 +35,18 @@ export {
   parseEmbeddedPalette,
 } from "./palette";
 export {
+  type MapData,
+  TILE_WIDTH,
+  TILE_HEIGHT,
+  parseMap,
+  rotateLayer,
+  tileToScreen,
+} from "./map";
+export {
   crossgateCgpLoader,
   crossgateGraphicInfoLoader,
   crossgateGraphicLoader,
+  crossgateMapLoader,
 } from "./loader";
 
 import { extensions } from "pixi.js";
@@ -45,9 +54,11 @@ import {
   crossgateCgpLoader,
   crossgateGraphicInfoLoader,
   crossgateGraphicLoader,
+  crossgateMapLoader,
 } from "./loader";
 
 // Auto-register loaders when this module is imported
 extensions.add(crossgateGraphicInfoLoader);
 extensions.add(crossgateGraphicLoader);
 extensions.add(crossgateCgpLoader);
+extensions.add(crossgateMapLoader);
