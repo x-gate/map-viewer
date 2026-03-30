@@ -10,6 +10,9 @@ import {
 } from "../../../crossgate";
 import { Label } from "../../ui/Label";
 
+/** Extra tile padding around the viewport to avoid pop-in */
+const CULL_PADDING = 6;
+
 function tileBBoxTopLeft(col: number, row: number): { x: number; y: number } {
   return {
     x: (col - row - 1) * (TILE_WIDTH / 2),
@@ -17,21 +20,58 @@ function tileBBoxTopLeft(col: number, row: number): { x: number; y: number } {
   };
 }
 
-/** The screen that renders a CrossGate map with a map selector overlay */
+/** Convert a local-space pixel position to fractional isometric tile coords */
+function screenToTile(px: number, py: number): { col: number; row: number } {
+  return {
+    col: px / TILE_WIDTH + 0.5 + py / TILE_HEIGHT,
+    row: py / TILE_HEIGHT - px / TILE_WIDTH - 0.5,
+  };
+}
+
+/** Pre-computed object entry with rotated coordinates */
+interface ObjectEntry {
+  rotCol: number;
+  rotRow: number;
+  mapId: number;
+}
+
+/** All data needed for a loaded map */
+interface LoadedMap {
+  name: string;
+  mapData: MapData;
+  rotGround: { data: Uint16Array; width: number; height: number };
+  objects: ObjectEntry[];
+}
+
 export class MainScreen extends Container {
   private mapContainer = new Container();
+  private groundContainer = new Container();
+  private objectContainer = new Container();
   private statusLabel!: Label;
-  private isDragging = false;
-  private lastPointer = { x: 0, y: 0 };
 
   private store!: CrossGateStore;
   private textureCache = new Map<number, Texture>();
 
+  // Viewport culling state
+  private currentMap: LoadedMap | null = null;
+  private groundSprites = new Map<number, Sprite>();
+  private objectSprites = new Map<number, Sprite>();
+  private screenWidth = 0;
+  private screenHeight = 0;
+
+  // Drag state
+  private isDragging = false;
+  private lastPointer = { x: 0, y: 0 };
+
+  // HTML overlay
   private selectorEl!: HTMLDivElement;
   private styleEl!: HTMLStyleElement;
 
   constructor() {
     super();
+    this.objectContainer.sortableChildren = true;
+    this.mapContainer.addChild(this.groundContainer);
+    this.mapContainer.addChild(this.objectContainer);
     this.addChild(this.mapContainer);
   }
 
@@ -53,7 +93,236 @@ export class MainScreen extends Container {
     this.setupDrag();
   }
 
-  /** Create the HTML map selector overlay */
+  // ── Map loading ──────────────────────────────────────────────
+
+  private loadMap(name: string) {
+    const mapData = this.store.maps.get(name);
+    if (!mapData) {
+      this.statusLabel.text = `Map ${name} not found`;
+      return;
+    }
+
+    // Clear previous
+    this.groundSprites.clear();
+    this.objectSprites.clear();
+    this.groundContainer.removeChildren();
+    this.objectContainer.removeChildren();
+    this.mapContainer.x = 0;
+    this.mapContainer.y = 0;
+
+    // Rotate ground layer
+    const rotGround = rotateLayer(
+      mapData.ground,
+      mapData.width,
+      mapData.height,
+    );
+
+    // Pre-compute object entries with rotated coords
+    const objects: ObjectEntry[] = [];
+    for (let i = 0; i < mapData.width * mapData.height; i++) {
+      const mapId = mapData.object[i];
+      if (mapId === 0) continue;
+      if (!this.store.mapIdIndex.has(mapId)) continue;
+      const origRow = Math.floor(i / mapData.width);
+      const origCol = i % mapData.width;
+      objects.push({
+        rotCol: origRow,
+        rotRow: mapData.width - 1 - origCol,
+        mapId,
+      });
+    }
+
+    this.currentMap = { name, mapData, rotGround, objects };
+
+    // Center the map at the middle of the isometric diamond
+    const midCol = rotGround.width / 2;
+    const midRow = rotGround.height / 2;
+    const center = tileBBoxTopLeft(midCol, midRow);
+    this.mapContainer.x = this.screenWidth / 2 - center.x;
+    this.mapContainer.y = this.screenHeight / 2 - center.y;
+
+    this.updateVisibleTiles();
+
+    this.statusLabel.text =
+      `${name}: ${mapData.width}×${mapData.height} | ` +
+      `${rotGround.width * rotGround.height} tiles | ` +
+      `${objects.length} objects`;
+  }
+
+  // ── Viewport culling ─────────────────────────────────────────
+
+  private getVisibleTileRange(): {
+    minCol: number;
+    maxCol: number;
+    minRow: number;
+    maxRow: number;
+  } {
+    // Viewport bounds in mapContainer local space
+    const left = -this.mapContainer.x;
+    const top = -this.mapContainer.y;
+    const right = left + this.screenWidth;
+    const bottom = top + this.screenHeight;
+
+    // Convert all 4 corners to tile coords and take the bounding range
+    const tl = screenToTile(left, top);
+    const tr = screenToTile(right, top);
+    const bl = screenToTile(left, bottom);
+    const br = screenToTile(right, bottom);
+
+    return {
+      minCol:
+        Math.floor(Math.min(tl.col, tr.col, bl.col, br.col)) - CULL_PADDING,
+      maxCol:
+        Math.ceil(Math.max(tl.col, tr.col, bl.col, br.col)) + CULL_PADDING,
+      minRow:
+        Math.floor(Math.min(tl.row, tr.row, bl.row, br.row)) - CULL_PADDING,
+      maxRow:
+        Math.ceil(Math.max(tl.row, tr.row, bl.row, br.row)) + CULL_PADDING,
+    };
+  }
+
+  private updateVisibleTiles() {
+    if (!this.currentMap) return;
+
+    const { rotGround, objects } = this.currentMap;
+    const range = this.getVisibleTileRange();
+
+    // Clamp to map bounds
+    const minCol = Math.max(0, range.minCol);
+    const maxCol = Math.min(rotGround.width - 1, range.maxCol);
+    const minRow = Math.max(0, range.minRow);
+    const maxRow = Math.min(rotGround.height - 1, range.maxRow);
+
+    // ── Ground layer ──
+
+    // Build set of tiles that should be visible
+    const visibleGround = new Set<number>();
+    for (let row = minRow; row <= maxRow; row++) {
+      for (let col = minCol; col <= maxCol; col++) {
+        visibleGround.add(row * rotGround.width + col);
+      }
+    }
+
+    // Remove sprites no longer visible
+    for (const [key, sprite] of this.groundSprites) {
+      if (!visibleGround.has(key)) {
+        this.groundContainer.removeChild(sprite);
+        this.groundSprites.delete(key);
+      }
+    }
+
+    // Add newly visible sprites
+    for (const key of visibleGround) {
+      if (this.groundSprites.has(key)) continue;
+      const mapId = rotGround.data[key];
+      const tex = this.getTexture(mapId);
+      if (!tex) continue;
+
+      const info = this.store.mapIdIndex.get(mapId)!;
+      const col = key % rotGround.width;
+      const row = Math.floor(key / rotGround.width);
+      const { x, y } = tileBBoxTopLeft(col, row);
+      const sprite = new Sprite(tex);
+      sprite.x = x + info.offX;
+      sprite.y = y + info.offY;
+      this.groundContainer.addChild(sprite);
+      this.groundSprites.set(key, sprite);
+    }
+
+    // ── Object layer ──
+
+    const visibleObjects = new Set<number>();
+    for (let i = 0; i < objects.length; i++) {
+      const obj = objects[i];
+      if (
+        obj.rotCol >= minCol &&
+        obj.rotCol <= maxCol &&
+        obj.rotRow >= minRow &&
+        obj.rotRow <= maxRow
+      ) {
+        visibleObjects.add(i);
+      }
+    }
+
+    for (const [key, sprite] of this.objectSprites) {
+      if (!visibleObjects.has(key)) {
+        this.objectContainer.removeChild(sprite);
+        this.objectSprites.delete(key);
+      }
+    }
+
+    for (const key of visibleObjects) {
+      if (this.objectSprites.has(key)) continue;
+      const obj = objects[key];
+      const tex = this.getTexture(obj.mapId);
+      if (!tex) continue;
+
+      const info = this.store.mapIdIndex.get(obj.mapId)!;
+      const { x, y } = tileBBoxTopLeft(obj.rotCol, obj.rotRow);
+      const sprite = new Sprite(tex);
+      sprite.x = x + info.offX;
+      sprite.y = y + info.offY;
+      sprite.zIndex = (obj.rotCol + obj.rotRow + 1) * (TILE_HEIGHT / 2);
+      this.objectContainer.addChild(sprite);
+      this.objectSprites.set(key, sprite);
+    }
+  }
+
+  // ── Texture helpers ──────────────────────────────────────────
+
+  private getTexture(mapId: number): Texture | null {
+    if (mapId === 0) return null;
+    if (this.textureCache.has(mapId)) return this.textureCache.get(mapId)!;
+
+    const info = this.store.mapIdIndex.get(mapId);
+    if (!info || info.width <= 0 || info.height <= 0) return null;
+
+    try {
+      const decoded = decodeGraphic(
+        this.store.graphicData,
+        info,
+        this.store.palette,
+      );
+      if (decoded.width === 0) return null;
+      const tex = Texture.from({
+        resource: decoded.pixels,
+        width: decoded.width,
+        height: decoded.height,
+      });
+      this.textureCache.set(mapId, tex);
+      return tex;
+    } catch {
+      return null;
+    }
+  }
+
+  // ── Drag / pan ───────────────────────────────────────────────
+
+  private setupDrag() {
+    this.eventMode = "static";
+    this.hitArea = { contains: () => true };
+
+    this.on("pointerdown", (e) => {
+      this.isDragging = true;
+      this.lastPointer.x = e.globalX;
+      this.lastPointer.y = e.globalY;
+    });
+
+    this.on("pointermove", (e) => {
+      if (!this.isDragging) return;
+      this.mapContainer.x += e.globalX - this.lastPointer.x;
+      this.mapContainer.y += e.globalY - this.lastPointer.y;
+      this.lastPointer.x = e.globalX;
+      this.lastPointer.y = e.globalY;
+      this.updateVisibleTiles();
+    });
+
+    this.on("pointerup", () => (this.isDragging = false));
+    this.on("pointerupoutside", () => (this.isDragging = false));
+  }
+
+  // ── Map selector UI ──────────────────────────────────────────
+
   private createSelector() {
     const mapNames = Array.from(this.store.maps.keys()).sort(
       (a, b) => parseInt(a) - parseInt(b),
@@ -149,160 +418,16 @@ export class MainScreen extends Container {
     selectEl.addEventListener("dblclick", doLoad);
   }
 
-  /** Load and render a map by name */
-  private loadMap(name: string) {
-    this.statusLabel.text = `Loading ${name}...`;
-
-    const mapData = this.store.maps.get(name);
-    if (!mapData) {
-      this.statusLabel.text = `Map ${name} not found`;
-      return;
-    }
-
-    // Clear previous map
-    this.mapContainer.removeChildren();
-    this.mapContainer.x = 0;
-    this.mapContainer.y = 0;
-
-    const result = this.renderMap(mapData);
-
-    this.statusLabel.text = `${name}: ${mapData.width}×${mapData.height} | Ground: ${result.ground} | Objects: ${result.objects} | Tiles: ${result.unique}`;
-
-    // Center the map
-    const bounds = this.mapContainer.getBounds();
-    const app = document.getElementById("pixi-container")!;
-    this.mapContainer.x = app.clientWidth / 2 - bounds.width / 2 - bounds.x;
-    this.mapContainer.y = 50 - bounds.y;
-  }
-
-  /** Render a parsed map into mapContainer */
-  private renderMap(mapData: MapData): {
-    ground: number;
-    objects: number;
-    unique: number;
-  } {
-    let newTextures = 0;
-
-    const getTexture = (mapId: number): Texture | null => {
-      if (mapId === 0) return null;
-      if (this.textureCache.has(mapId)) return this.textureCache.get(mapId)!;
-
-      const info = this.store.mapIdIndex.get(mapId);
-      if (!info || info.width <= 0 || info.height <= 0) return null;
-
-      try {
-        const decoded = decodeGraphic(
-          this.store.graphicData,
-          info,
-          this.store.palette,
-        );
-        if (decoded.width === 0) return null;
-        const tex = Texture.from({
-          resource: decoded.pixels,
-          width: decoded.width,
-          height: decoded.height,
-        });
-        this.textureCache.set(mapId, tex);
-        newTextures++;
-        return tex;
-      } catch {
-        return null;
-      }
-    };
-
-    const rotated = rotateLayer(mapData.ground, mapData.width, mapData.height);
-
-    const groundContainer = new Container();
-    const objectContainer = new Container();
-    objectContainer.sortableChildren = true;
-    this.mapContainer.addChild(groundContainer);
-    this.mapContainer.addChild(objectContainer);
-
-    // Ground layer
-    let groundRendered = 0;
-    for (let row = 0; row < rotated.height; row++) {
-      for (let col = 0; col < rotated.width; col++) {
-        const mapId = rotated.data[row * rotated.width + col];
-        const tex = getTexture(mapId);
-        if (!tex) continue;
-
-        const info = this.store.mapIdIndex.get(mapId)!;
-        const { x, y } = tileBBoxTopLeft(col, row);
-        const sprite = new Sprite(tex);
-        sprite.x = x + info.offX;
-        sprite.y = y + info.offY;
-        groundContainer.addChild(sprite);
-        groundRendered++;
-      }
-    }
-
-    // Object layer
-    let objectRendered = 0;
-    for (let i = 0; i < mapData.width * mapData.height; i++) {
-      const mapId = mapData.object[i];
-      if (mapId === 0) continue;
-
-      const info = this.store.mapIdIndex.get(mapId);
-      if (!info) continue;
-
-      const tex = getTexture(mapId);
-      if (!tex) continue;
-
-      const origRow = Math.floor(i / mapData.width);
-      const origCol = i % mapData.width;
-      const rotCol = origRow;
-      const rotRow = mapData.width - 1 - origCol;
-
-      const { x, y } = tileBBoxTopLeft(rotCol, rotRow);
-      const sprite = new Sprite(tex);
-      sprite.x = x + info.offX;
-      sprite.y = y + info.offY;
-      sprite.zIndex = (rotCol + rotRow + 1) * (TILE_HEIGHT / 2);
-      objectContainer.addChild(sprite);
-      objectRendered++;
-    }
-
-    return {
-      ground: groundRendered,
-      objects: objectRendered,
-      unique: newTextures,
-    };
-  }
-
-  private setupDrag() {
-    this.eventMode = "static";
-    this.hitArea = { contains: () => true };
-
-    this.on("pointerdown", (e) => {
-      this.isDragging = true;
-      this.lastPointer.x = e.globalX;
-      this.lastPointer.y = e.globalY;
-    });
-
-    this.on("pointermove", (e) => {
-      if (!this.isDragging) return;
-      const dx = e.globalX - this.lastPointer.x;
-      const dy = e.globalY - this.lastPointer.y;
-      this.mapContainer.x += dx;
-      this.mapContainer.y += dy;
-      this.lastPointer.x = e.globalX;
-      this.lastPointer.y = e.globalY;
-    });
-
-    this.on("pointerup", () => (this.isDragging = false));
-    this.on("pointerupoutside", () => (this.isDragging = false));
-  }
+  // ── Lifecycle ────────────────────────────────────────────────
 
   public async hide() {
     this.selectorEl?.remove();
     this.styleEl?.remove();
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  public resize(width: number, _height: number) {
-    if (this.mapContainer.x === 0 && this.mapContainer.y === 0) {
-      this.mapContainer.x = width / 2;
-      this.mapContainer.y = 100;
-    }
+  public resize(width: number, height: number) {
+    this.screenWidth = width;
+    this.screenHeight = height;
+    this.updateVisibleTiles();
   }
 }
