@@ -1,163 +1,110 @@
-import { FancyButton } from "@pixi/ui";
-import { animate } from "motion";
-import type { AnimationPlaybackControls } from "motion/react";
-import type { Ticker } from "pixi.js";
-import { Container } from "pixi.js";
+import { Assets, Container, Sprite, Texture } from "pixi.js";
 
-import { engine } from "../../getEngine";
-import { PausePopup } from "../../popups/PausePopup";
-import { SettingsPopup } from "../../popups/SettingsPopup";
-import { Button } from "../../ui/Button";
+import type { GraphicInfoEntry } from "../../../crossgate";
+import { decodeGraphic, loadDefaultPalette } from "../../../crossgate";
+import { Label } from "../../ui/Label";
 
-import { Bouncer } from "./Bouncer";
+/** Sample graphic indices to display on screen */
+const SAMPLE_INDICES = [0, 100, 200, 300, 400, 500, 600, 700, 800, 900];
 
-/** The screen that holds the app */
+/** The screen that holds the app — renders CrossGate graphics for verification */
 export class MainScreen extends Container {
-  /** Assets bundles required by this screen */
   public static assetBundles = ["main"];
 
-  public mainContainer: Container;
-  private pauseButton: FancyButton;
-  private settingsButton: FancyButton;
-  private addButton: FancyButton;
-  private removeButton: FancyButton;
-  private bouncer: Bouncer;
-  private paused = false;
+  private gridContainer = new Container();
+  private statusLabel!: Label;
 
   constructor() {
     super();
-
-    this.mainContainer = new Container();
-    this.addChild(this.mainContainer);
-    this.bouncer = new Bouncer();
-
-    const buttonAnimations = {
-      hover: {
-        props: {
-          scale: { x: 1.1, y: 1.1 },
-        },
-        duration: 100,
-      },
-      pressed: {
-        props: {
-          scale: { x: 0.9, y: 0.9 },
-        },
-        duration: 100,
-      },
-    };
-    this.pauseButton = new FancyButton({
-      defaultView: "icon-pause.png",
-      anchor: 0.5,
-      animations: buttonAnimations,
-    });
-    this.pauseButton.onPress.connect(() =>
-      engine().navigation.presentPopup(PausePopup),
-    );
-    this.addChild(this.pauseButton);
-
-    this.settingsButton = new FancyButton({
-      defaultView: "icon-settings.png",
-      anchor: 0.5,
-      animations: buttonAnimations,
-    });
-    this.settingsButton.onPress.connect(() =>
-      engine().navigation.presentPopup(SettingsPopup),
-    );
-    this.addChild(this.settingsButton);
-
-    this.addButton = new Button({
-      text: "Add",
-      width: 175,
-      height: 110,
-    });
-    this.addButton.onPress.connect(() => this.bouncer.add());
-    this.addChild(this.addButton);
-
-    this.removeButton = new Button({
-      text: "Remove",
-      width: 175,
-      height: 110,
-    });
-    this.removeButton.onPress.connect(() => this.bouncer.remove());
-    this.addChild(this.removeButton);
+    this.addChild(this.gridContainer);
   }
 
-  /** Prepare the screen just before showing */
   public prepare() {}
 
-  /** Update the screen */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  public update(_time: Ticker) {
-    if (this.paused) return;
-    this.bouncer.update();
-  }
-
-  /** Pause gameplay - automatically fired when a popup is presented */
-  public async pause() {
-    this.mainContainer.interactiveChildren = false;
-    this.paused = true;
-  }
-
-  /** Resume gameplay */
-  public async resume() {
-    this.mainContainer.interactiveChildren = true;
-    this.paused = false;
-  }
-
-  /** Fully reset */
-  public reset() {}
-
-  /** Resize the screen, fired whenever window size changes */
-  public resize(width: number, height: number) {
-    const centerX = width * 0.5;
-    const centerY = height * 0.5;
-
-    this.mainContainer.x = centerX;
-    this.mainContainer.y = centerY;
-    this.pauseButton.x = 30;
-    this.pauseButton.y = 30;
-    this.settingsButton.x = width - 30;
-    this.settingsButton.y = 30;
-    this.removeButton.x = width / 2 - 100;
-    this.removeButton.y = height - 75;
-    this.addButton.x = width / 2 + 100;
-    this.addButton.y = height - 75;
-
-    this.bouncer.resize(width, height);
-  }
-
-  /** Show screen with animations */
   public async show(): Promise<void> {
-    engine().audio.bgm.play("main/sounds/bgm-main.mp3", { volume: 0.5 });
+    this.statusLabel = new Label({
+      text: "Loading CrossGate assets...",
+      style: { fill: 0xffffff, fontSize: 18 },
+    });
+    this.statusLabel.y = 10;
+    this.statusLabel.x = 10;
+    this.addChild(this.statusLabel);
 
-    const elementsToAnimate = [
-      this.pauseButton,
-      this.settingsButton,
-      this.addButton,
-      this.removeButton,
-    ];
+    try {
+      // Load the default CGP palette
+      await loadDefaultPalette();
 
-    let finalPromise!: AnimationPlaybackControls;
-    for (const element of elementsToAnimate) {
-      element.alpha = 0;
-      finalPromise = animate(
-        element,
-        { alpha: 1 },
-        { duration: 0.3, delay: 0.75, ease: "backOut" },
-      );
+      // Load GraphicInfo and Graphic data
+      const graphicInfos =
+        await Assets.load<GraphicInfoEntry[]>("GraphicInfo_66.bin");
+      const graphicData = await Assets.load<ArrayBuffer>("Graphic_66.bin");
+
+      this.statusLabel.text = `Loaded ${graphicInfos.length} graphic entries (${(graphicData.byteLength / 1024 / 1024).toFixed(1)} MB)`;
+
+      // Render sample graphics in a grid
+      let col = 0;
+      let row = 0;
+      const spacing = 120;
+      let rendered = 0;
+
+      for (const idx of SAMPLE_INDICES) {
+        if (idx >= graphicInfos.length) continue;
+        const info = graphicInfos[idx];
+        if (info.width <= 0 || info.height <= 0) continue;
+
+        try {
+          const decoded = decodeGraphic(graphicData, info);
+          if (decoded.width === 0 || decoded.height === 0) continue;
+
+          const texture = Texture.from({
+            resource: decoded.pixels,
+            width: decoded.width,
+            height: decoded.height,
+          });
+
+          const sprite = new Sprite(texture);
+          // Scale down large sprites to fit the grid
+          const maxDim = Math.max(sprite.width, sprite.height);
+          if (maxDim > 100) {
+            const scale = 100 / maxDim;
+            sprite.scale.set(scale);
+          }
+          sprite.x = col * spacing;
+          sprite.y = row * spacing;
+          this.gridContainer.addChild(sprite);
+
+          // Add index label below the sprite
+          const label = new Label({
+            text: `#${idx}`,
+            style: { fill: 0xaaaaaa, fontSize: 12 },
+          });
+          label.x = col * spacing;
+          label.y = row * spacing + 105;
+          this.gridContainer.addChild(label);
+
+          rendered++;
+          col++;
+          if (col >= 5) {
+            col = 0;
+            row++;
+          }
+        } catch (e) {
+          console.warn(`Failed to decode graphic #${idx}:`, e);
+        }
+      }
+
+      this.statusLabel.text += ` | Rendered ${rendered}/${SAMPLE_INDICES.length} samples`;
+    } catch (e) {
+      console.error("Failed to load CrossGate assets:", e);
+      this.statusLabel.text = `Error: ${e}`;
     }
-
-    await finalPromise;
-    this.bouncer.show(this);
   }
 
-  /** Hide screen with animations */
   public async hide() {}
 
-  /** Auto pause the app when window go out of focus */
-  public blur() {
-    if (!engine().navigation.currentPopup) {
-      engine().navigation.presentPopup(PausePopup);
-    }
+  public resize(width: number, height: number) {
+    // Center the grid
+    this.gridContainer.x = (width - this.gridContainer.width) * 0.5;
+    this.gridContainer.y = (height - this.gridContainer.height) * 0.5 + 20;
   }
 }

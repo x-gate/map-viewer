@@ -9,6 +9,7 @@ import { CreationEngine } from "./engine/engine";
  */
 import "@pixi/sound";
 // import "@esotericsoftware/spine-pixi-v8";
+import "./crossgate";
 
 // Create a new creation engine instance
 const engine = new CreationEngine();
