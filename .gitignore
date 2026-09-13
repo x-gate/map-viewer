@@ -22,3 +22,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Generated bindings, build cache, and synthetic test outputs
+.generated/
+test-results/
+playwright-report/
+# Local game resources must never enter this repository
+CGoriginmood/
+Assets/

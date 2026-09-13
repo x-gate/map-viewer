@@ -4,16 +4,23 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "npm run dev",
-    "build": "npm run lint && tsc && vite build",
+    "start": "bun run dev",
+    "dev": "vite",
+    "build:wasm": "bun scripts/build-wasm.ts",
+    "build": "bun run lint && bun run typecheck && vite build",
     "lint": "eslint .",
-    "dev": "vite"
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write src scripts tests index.html vite.config.ts README.md package.json",
+    "test": "bun test tests/unit",
+    "preview": "vite preview --host 127.0.0.1 --port 8080"
   },
   "dependencies": {
     "pixi.js": "^8.8.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.21.0",
+    "@playwright/test": "^1.63.0",
+    "@types/bun": "^1.4.2",
     "eslint": "^9.21.0",
     "eslint-config-prettier": "^10.1.2",
     "eslint-plugin-prettier": "^5.2.6",
