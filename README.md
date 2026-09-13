@@ -1,10 +1,12 @@
-# map-viewer
+# x-gate 地圖檢視器
 
-x-gate 地圖檢視器，以 PixiJS / TypeScript 呈現、`../xglib` 的 WASM bindings 解析本機資源。此階段提供 WASM 建置、根目錄辨識、Worker 資源讀取及合成資料測試。
+使用 PixiJS 8 與 `xglib` WASM，在瀏覽器中讀取本機《魔力寶貝》資源並瀏覽等角地圖。介面採繁體中文，沒有多語系層，也不需要後端服務或帳號。
 
-## 開發
+## 開始使用
 
-需要 Bun、支援 edition 2024 的 Rust、wasm32-unknown-unknown target，以及 wasm-bindgen-cli 0.2.118。xglib 整合基準為 `b111040f69ee27bbd24667be6acebf0d443e3b79`。
+需要 Bun（本次驗證 1.4.2）、支援 edition 2024 的 Rust、`wasm32-unknown-unknown` target，以及與 `xglib/Cargo.lock` 相同版本的 `wasm-bindgen-cli`（目前 0.2.118）。建置時需要同工作區的 `../xglib`；整合基準為 `b111040f69ee27bbd24667be6acebf0d443e3b79`。
+
+在本 repository 執行：
 
 ```sh
 bun install --frozen-lockfile
@@ -12,14 +14,91 @@ rustup target add wasm32-unknown-unknown
 cargo install wasm-bindgen-cli --version 0.2.118 --locked
 bun run build:wasm
 bun run dev
-bun run test
-bun run build
 ```
 
-`XGLIB_DIR` 可指定 xglib repository，`WASM_BINDGEN` 可指定 CLI。產物與快取位於忽略的 `.generated/`；不修改相依 repository。無後端服務。
+開啟 [本機檢視器](http://127.0.0.1:8080)。`build:wasm` 將 Rust 編譯快取、JS glue、WASM 和 TypeScript 契約產生於忽略的 `.generated/`，不修改 `xglib`。更新 xglib 後需重跑。可使用 `XGLIB_DIR=/其他位置/xglib`、`WASM_BINDGEN=/工具位置/wasm-bindgen` 指定路徑；相對路徑以本 repository 為基準。
 
-選取的遊戲根目錄應含 `Assets/bin/GraphicInfo*.bin`、配對的 `Graphic*.bin`、`Assets/bin/pal/*.cgp` 與 `Assets/map/**/*.dat`。資源讀取使用 `File` 與 `File.slice`，地圖、圖像與調色盤解析透過 xglib WASM 完成；輸出契約沿用 xglib 的 TypeScript 宣告。
+## 選擇遊戲資料夾
 
-圖像 strict 失敗會回傳診斷，不啟用截尾／補零。重複 map_id 保留索引列，暫採第一列；不宣稱為原作覆蓋規則。
+首次進入時點選「選擇遊戲資料夾」，選擇**包含 `Assets` 的遊戲根目錄**：
 
-此非官方工具不包含遊戲素材，沒有 Square Enix 授權或背書。遊戲名稱及商標屬各權利人；正式專案授權尚未決定。
+```text
+遊戲根目錄/
+└── Assets/
+    ├── bin/
+    │   ├── GraphicInfo_66.bin
+    │   ├── Graphic_66.bin
+    │   ├── GraphicInfoEx_5.bin       # 其他資源集可選
+    │   ├── GraphicEx_5.bin
+    │   └── pal/
+    │       └── palet_00.cgp
+    └── map/
+        ├── 0/1000.dat
+        └── 1/5/1.dat
+```
+
+檔名配對不區分大小寫；每個 `GraphicInfo<後綴>.bin` 對應同資料夾的 `Graphic<後綴>.bin`。選擇一組圖像資源與一個 CGP 調色盤後開啟檢視器；多組資源不會自動混合或覆蓋。
+
+Chrome / Edge 可將資料夾 handle 記在此網站的 IndexedDB，下次點選「繼續使用…」重新授權讀取。僅記 handle，不儲存遊戲檔案；「忘記資料夾」會移除記錄並釋放目前資源。瀏覽器也可能撤銷權限，不能保證永久免選取。未提供 `showDirectoryPicker` 的瀏覽器自動使用 `webkitdirectory`；也可主動點選「改用相容模式選取資料夾」。相容模式每次重新進入需再次選取，不會記住這次資料夾。
+
+所有檔案處理在本機瀏覽器內完成。程式沒有上傳端點、遙測或外部字型請求，不寫入遊戲根目錄。部署只包含應用程式與 WASM，不包含使用者資源。
+
+## 操作
+
+- 左側搜尋完整路徑或地圖編號；點選地圖立即載入。同名 `.dat` 以完整相對路徑區分，不推測遊戲地圖名稱。
+- 拖曳平移；滾輪以游標為中心縮放；`＋` / `−` 調整比例，比例按鈕回到 100%，「適合視窗」置中並縮放。
+- 畫布取得焦點後可用方向鍵平移、`+` / `-` 縮放、`0` 適合視窗；`/` 聚焦搜尋。
+- 「地表」「物件」「格線」獨立控制顯示；點選格位查看原始座標、兩層 ID 與十六進位 meta。
+- 「資源設定」返回設定頁，可切換資源集、調色盤或資料夾；套用後重新載入地圖並釋放前一組圖像快取。
+- 「檢視診斷」查看重複 ID、缺少圖塊與解碼失敗；缺少或無法解析的圖塊以粉色菱形 `?` 呈現。
+- 載入期間可「取消」。毀損地圖不會清除上一張已成功開啟的地圖，可直接選擇其他地圖重試。
+
+## 指令與驗證
+
+```sh
+bun run lint        # ESLint / Prettier
+bun run typecheck   # TypeScript 嚴格檢查
+bun run test        # 合成資源 + 真實 WASM runtime 單元測試
+bun run test:e2e    # Chrome 端對端測試；自動產生原創測試資源
+bun run build       # lint + typecheck + Vite 正式建置
+bun run preview     # 預覽 dist，127.0.0.1:8080
+bun run format      # 格式化維護中的程式碼與文件
+```
+
+端對端測試預設使用已安裝的 Google Chrome。沒有 Chrome 的環境可先執行 `bunx playwright install chrome`。一般測試完全不需要遊戲資料，`.generated/fixture-game` 是程式產生的合成 bytes。正式建置輸出於 `dist/`，可由靜態 HTTP(S) 主機服務；`base: "./"` 支援子目錄部署。資料夾 handle API 需要 localhost 或 HTTPS。不要直接以 `file://` 開啟。
+
+選用的本機唯讀整合驗證：
+
+```sh
+bun scripts/audit-local.ts ../CGoriginmood Graphic_66 Assets/map/0/1000.dat > .generated/local-audit.json
+GAME_ROOT=/絕對路徑/遊戲根目錄 bun run test:e2e
+```
+
+audit 輸出選定四個來源檔的 SHA-256、地圖尺寸、圖塊統計、解碼錯誤與 `inputsUnchanged`，不輸出圖像。未對應 ID / strict 解碼失敗會回傳 exit 1，即使輸入完整性驗證成功。選用瀏覽器測試目前指定基本資源集與 `0/1000.dat`，其他版本需調整測試案例。測試不會產生遊戲畫面截圖。
+
+## 架構與介面
+
+| 模組                                                  | 責任                                         |
+| ----------------------------------------------------- | -------------------------------------------- |
+| `src/resources/catalog.ts`、`directory.ts`            | 唯讀資料夾取得、檔名配對、handle 記錄        |
+| `src/resources/worker.ts`、`client.ts`、`protocol.ts` | 可取消的 Worker request / result 邊界        |
+| `src/resources/session.ts`、`wasm.ts`                 | 索引尋址、檔案切片、xglib 解析與 RGBA 轉換   |
+| `src/viewer/geometry.ts`、`map-view.ts`               | 投影、可見區域裁切、圖像快取、深度排序與操作 |
+| `src/main.ts`、`style.css`                            | 繁體中文介面與使用流程                       |
+| `scripts/build-wasm.ts`                               | 以鎖定 Cargo 依賴產生瀏覽器 bindings         |
+
+唯一跨 repository 依賴為 `map-viewer → xglib`；沒有反向依賴或公開網路 API。WASM 輸入為 `Uint8Array`，使用 `map_build_from_bytes`、`game_palette_build_from_cgp`、`graphic_strict_build_from_cgp`。索引的 40-byte container addressing 由 TypeScript 讀取；地圖、圖像、RLE 與調色盤的實際解碼交由 Rust。
+
+## 相容性與界限
+
+目前支援單一圖像資源集、靜態地表與物件。尚無動畫、跨資源集合成、碰撞模擬或完整遊戲邏輯。格距 64 × 47、旋轉、圖像垂直翻轉與物件深度排序沿用參考檢視器慣例；不是官方規格保證。重複 `map_id` 保留來源與索引列，暫採所選資源集的第一列，不聲稱這是原作覆蓋順序。
+
+每張地圖最多 1,000,000 格；單張圖像邊長最多 4,096、像素最多 4,194,304，資料切片最多 16 MiB。畫布最多呈現 200,000 個可見 sprites，超過時顯示放大提示；格線只在較小的可見範圍繪製。未使用的紋理按近期使用順序回收，快取以 128 MiB 為目標；目前畫面正在使用的圖像不會強制回收，因此這不是總記憶體硬上限。切換地圖會清除圖像快取。
+
+xglib 目前沒有完整的解壓配置上限；這些預檢和 Worker 隔離不等於任意惡意檔案的安全保證。此版本以本機既有遊戲資源為驗證範圍。strict 解析失敗會保留診斷，不啟用補零或截尾的寬鬆模式。
+
+已執行的驗證與證據見 [整合紀錄](docs/integration.md)。介面流程參考 [x-gate/map-viewer](https://github.com/x-gate/map-viewer)，採獨立實作；圖像與座標慣例的具體來源記錄於整合文件。
+
+## 授權與歸屬
+
+這是非官方研究工具，未由 Square Enix 授權或背書。遊戲名稱及商標屬各權利人。使用者自行提供有權使用的本機資料，本 repository 不提供或散布原版程式碼、圖像、地圖、音訊或其他遊戲素材。首頁圖示與合成測試圖像為本次自行設計。專案尚未訂定正式授權，請勿自行假定已有開源散布授權。
