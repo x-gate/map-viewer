@@ -73,3 +73,38 @@ export function syntheticResources() {
     ["Assets/map/0/broken.dat", new Uint8Array(20)],
   ]);
 }
+
+export function candidateResources() {
+  const files = syntheticResources();
+  const records: Uint8Array[] = [];
+  const index = new Uint8Array(15 * 40);
+  let address = 0;
+  for (let row = 0; row < 15; row++) {
+    const data = graphicBytes(32 + row * 2, 47, row % 2 ? 16 : 17);
+    if (row === 14) data[0] = 0; // Valid index, malformed image payload.
+    const info = infoBytes(
+      2,
+      row === 13 ? 999999 : address,
+      data.length,
+      32 + row * 2,
+      47,
+    );
+    new DataView(info.buffer).setInt32(0, 100 + row, true); // graphic id is not the map id.
+    index.set(info, row * 40);
+    records.push(data);
+    address += data.length;
+  }
+  const data = new Uint8Array(address);
+  let offset = 0;
+  for (const record of records) {
+    data.set(record, offset);
+    offset += record.length;
+  }
+  files.set("Assets/bin/GraphicInfo_2.bin", index);
+  files.set("Assets/bin/Graphic_2.bin", data);
+  files.set("Assets/bin/GraphicInfo_3.bin", infoBytes(2));
+  files.set("Assets/bin/Graphic_3.bin", graphicBytes());
+  files.set("Assets/bin/GraphicInfo_bad.bin", new Uint8Array(41));
+  files.set("Assets/bin/Graphic_bad.bin", new Uint8Array(20));
+  return files;
+}

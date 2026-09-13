@@ -1,8 +1,10 @@
 import { initialize, parser } from "./wasm";
+import { CandidateLibrary } from "./candidates";
 import { ResourceSession } from "./session";
 import type { Request, Result } from "./protocol";
 const ready = initialize();
 const session = new ResourceSession(parser);
+const candidates = new CandidateLibrary(parser);
 // Serialize file reads and WASM calls; the client terminates this worker on resource changes.
 let queue = Promise.resolve();
 self.onmessage = ({ data }: MessageEvent<{ id: number; request: Request }>) => {
@@ -19,7 +21,19 @@ self.onmessage = ({ data }: MessageEvent<{ id: number; request: Request }>) => {
         };
       else if (request.kind === "map")
         result = { kind: "map", value: await session.open(request.file) };
-      else {
+      else if (request.kind === "candidate-init") {
+        await candidates.initialize(request.sets, request.palette);
+        result = { kind: "candidate-init" };
+      } else if (request.kind === "candidates") {
+        result = {
+          kind: "candidates",
+          value: await candidates.search(request.mapId, request.offset),
+        };
+      } else if (request.kind === "candidate-decode") {
+        const decoded = await candidates.decode(request.ref);
+        result = { kind: "candidate-decode", ...decoded };
+        transfer.push(decoded.tile.rgba.buffer);
+      } else {
         result = { kind: "tiles", tiles: [], errors: [] };
         for (const mapId of request.ids.slice(0, 32)) {
           try {

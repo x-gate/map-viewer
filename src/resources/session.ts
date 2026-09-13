@@ -1,8 +1,9 @@
 import type * as Contract from "../../.generated/xglib/contract";
 import type { ResourceSet } from "./catalog";
 import type { TileInfo, OpenResult, DecodedTile } from "./protocol";
+import { readTileInfo, validTileInfo, decodeTile } from "./graphic";
 const MAX_CELLS = 1_000_000;
-const MAX_PIXELS = 4_194_304;
+
 export class ResourceSession {
   private index = new Uint8Array();
   private data!: File;
@@ -21,22 +22,14 @@ export class ResourceSession {
     this.data = set.data.file;
     this.tiles.clear();
     this.duplicates = 0;
-    const view = new DataView(this.index.buffer);
-    // Container addressing only; map / graphic / palette decoding belongs to xglib.
+    // Container addressing only; actual decoding belongs to xglib.
     for (let offset = 0; offset < this.index.length; offset += 40) {
-      const mapId = view.getInt32(offset + 36, true);
+      const info = readTileInfo(
+        this.index.subarray(offset, offset + 40),
+        offset / 40,
+      );
+      const mapId = info.mapId;
       if (mapId <= 0) continue;
-      const info: TileInfo = {
-        mapId,
-        row: offset / 40,
-        id: view.getInt32(offset, true),
-        addr: view.getUint32(offset + 4, true),
-        len: view.getInt32(offset + 8, true),
-        offX: view.getInt32(offset + 12, true),
-        offY: view.getInt32(offset + 16, true),
-        width: view.getInt32(offset + 20, true),
-        height: view.getInt32(offset + 24, true),
-      };
       const rows = this.tiles.get(mapId) ?? [];
       if (rows.length) this.duplicates++;
       rows.push(info);
@@ -61,51 +54,20 @@ export class ResourceSession {
     for (const id of ids) {
       const info = this.tiles.get(id)?.[0];
       if (!info) missing++;
-      else if (!this.valid(info)) invalid++;
+      else if (!validTileInfo(info, this.data.size)) invalid++;
       else tiles.push(info);
     }
     return { map, tiles, missing, invalid, duplicates: this.duplicates };
   }
-  private valid(info: TileInfo) {
-    return (
-      info.width > 0 &&
-      info.height > 0 &&
-      info.width <= 4096 &&
-      info.height <= 4096 &&
-      info.width * info.height <= MAX_PIXELS &&
-      info.len >= 16 &&
-      info.len <= 16_777_216 &&
-      info.addr + info.len <= this.data.size &&
-      Math.abs(info.offX) <= 8192 &&
-      Math.abs(info.offY) <= 8192
-    );
-  }
   async decode(mapId: number): Promise<DecodedTile> {
     const info = this.tiles.get(mapId)?.[0];
-    if (!info || !this.valid(info))
-      throw new Error("找不到有效圖塊索引或已超過圖像資源上限。");
-    const bytes = new Uint8Array(
-      await this.data.slice(info.addr, info.addr + info.len).arrayBuffer(),
-    );
-    const header = new DataView(bytes.buffer);
-    const width = header.getInt32(4, true),
-      height = header.getInt32(8, true);
-    if (width !== info.width || height !== info.height)
-      throw new Error(`索引列 ${info.row} 的圖像尺寸與 RD header 不符。`);
-    const graphic = this.parser.graphic_strict_build_from_cgp(
+    if (!info) throw new Error("找不到有效圖塊索引或已超過圖像資源上限。");
+    return decodeTile(
+      this.parser,
       this.index.subarray(info.row * 40, (info.row + 1) * 40),
-      bytes,
+      info,
+      this.data,
       this.palette,
     );
-    const rgba = new Uint8Array(width * height * 4);
-    for (let i = 0; i < graphic.payload.length; i++) {
-      const color = graphic.palette.colors[graphic.payload[i]];
-      if (!color) throw new Error("圖像色彩索引超出調色盤。");
-      // Reference viewer uses bottom-up source rows; xglib preserves source order.
-      const destination =
-        ((height - 1 - Math.floor(i / width)) * width + (i % width)) * 4;
-      rgba.set([color.red, color.green, color.blue, color.alpha], destination);
-    }
-    return { mapId, width, height, rgba };
   }
 }
