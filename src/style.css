@@ -968,3 +968,244 @@ pre {
     transition: none !important;
   }
 }
+
+.candidate-panel {
+  position: absolute;
+  z-index: 3;
+  top: 14px;
+  right: 14px;
+  bottom: 14px;
+  width: 386px;
+  max-width: calc(100% - 28px);
+  display: flex;
+  flex-direction: column;
+  background: #17251ff5;
+  border: 1px solid #476453;
+  border-radius: 10px;
+  box-shadow: 0 12px 40px #0007;
+  padding: 16px;
+  overflow: hidden;
+  backdrop-filter: blur(8px);
+}
+.candidate-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: none;
+}
+.candidate-heading h2 {
+  font-size: 18px;
+  margin: 6px 0 0;
+  letter-spacing: 1px;
+}
+.candidate-cell {
+  white-space: pre-line;
+  line-height: 1.6;
+  font:
+    12px ui-monospace,
+    monospace;
+  color: #c4dece;
+  margin: 14px 0;
+}
+.candidate-layer {
+  display: flex;
+  gap: 24px;
+  border: 1px solid #3a5544;
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin: 0;
+  font-size: 12px;
+  flex: none;
+}
+.candidate-layer legend {
+  font-size: 10px;
+  color: #94b19f;
+}
+.candidate-layer label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.candidate-layer input {
+  accent-color: var(--accent);
+}
+.candidate-panel .hint {
+  font-size: 10px;
+  margin: 9px 0 0;
+}
+.candidate-panel .candidate-note {
+  color: #90a89a;
+  margin: 5px 0;
+}
+.candidate-status {
+  font-size: 11px;
+  color: #b6d8c2;
+  min-height: 18px;
+  margin: 10px 0;
+  flex: none;
+}
+.candidate-results {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-right: 4px;
+}
+.candidate-card {
+  border: 1px solid #344d3e;
+  background: #122018;
+  border-radius: 7px;
+  padding: 10px;
+  display: grid;
+  grid-template-columns: 100px minmax(0, 1fr);
+  gap: 10px;
+  flex: none;
+}
+.candidate-card[data-placed="true"] {
+  border-color: #a8dfba;
+  background: #243c2c;
+}
+.candidate-card > canvas {
+  width: 100px;
+  height: 78px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  border-radius: 4px;
+  background-color: #19271f;
+  background-image: conic-gradient(
+    #2d3f3255 25%,
+    transparent 0 50%,
+    #2d3f3255 0 75%,
+    transparent 0
+  );
+  background-size: 12px 12px;
+}
+.candidate-details {
+  min-width: 0;
+}
+.candidate-details strong {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: 11px;
+  color: #bce0c7;
+}
+.candidate-details p {
+  font-size: 10px;
+  line-height: 1.6;
+  white-space: pre-line;
+  margin: 6px 0;
+  color: #adc5b5;
+}
+.candidate-details small {
+  display: block;
+  font-size: 9px;
+  line-height: 1.6;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  color: #7d9987;
+}
+.candidate-details .button {
+  font-size: 10px;
+  min-height: 29px;
+  padding: 6px 10px;
+  width: 100%;
+}
+.candidate-warning {
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  font-size: 10px;
+  line-height: 1.6;
+  color: #e1b792 !important;
+  margin: 6px 0;
+  max-height: 74px;
+  overflow: auto;
+}
+.candidate-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid #364d3f;
+  gap: 10px;
+  flex: none;
+}
+.candidate-pagination .button {
+  font-size: 10px;
+  min-height: 29px;
+  padding: 6px 12px;
+}
+.candidate-pagination span {
+  font:
+    10px ui-monospace,
+    monospace;
+  color: #a7beaf;
+}
+.candidate-trial {
+  flex: none;
+}
+.candidate-trial > p:first-child {
+  font-size: 10px;
+  color: #b3d7bf;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+  margin: 10px 0;
+}
+.candidate-trial > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.candidate-trial .button {
+  font-size: 10px;
+  min-height: 29px;
+  padding: 6px 12px;
+}
+.candidate-trial .text-button {
+  font-size: 10px;
+}
+@media (max-width: 640px) {
+  .candidate-panel {
+    top: 8px;
+    bottom: 8px;
+    right: 8px;
+    max-width: calc(100% - 16px);
+    padding: 10px;
+  }
+  .candidate-card {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+  .candidate-card > canvas {
+    width: 100%;
+    height: 75px;
+  }
+  .candidate-panel .candidate-note {
+    display: none;
+  }
+  .candidate-cell {
+    font-size: 10px;
+    line-height: 1.6;
+  }
+  .candidate-layer {
+    gap: 12px;
+    padding: 6px;
+    font-size: 11px;
+  }
+  .candidate-heading h2 {
+    font-size: 15px;
+  }
+  .candidate-trial > div {
+    flex-wrap: wrap;
+  }
+  .candidate-pagination {
+    gap: 4px;
+  }
+  .candidate-pagination .button {
+    padding: 5px 7px;
+  }
+}

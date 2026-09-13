@@ -7,7 +7,16 @@ import {
   Texture,
 } from "pixi.js";
 import type { ResourceClient } from "../resources/client";
-import type { GameMap, OpenResult, TileInfo } from "../resources/protocol";
+import { candidateKey } from "../resources/protocol";
+import type {
+  Candidate,
+  DecodedTile,
+  SelectedCell,
+  TileLayer,
+  GameMap,
+  OpenResult,
+  TileInfo,
+} from "../resources/protocol";
 import { clampZoom, screenTile, tilePosition } from "./geometry";
 interface Cached {
   texture: Texture;
@@ -32,6 +41,11 @@ export class MapView {
   private map?: GameMap;
   private infos = new Map<number, TileInfo>();
   private cache = new Map<number, Cached>();
+  private trials = new Map<string, Candidate>();
+  private trialTextures = new Map<
+    string,
+    { texture: Texture; bytes: number }
+  >();
   private sprites = new Map<string, Sprite>();
   private failed = new Map<number, string>();
   private missingTexture!: Texture;
@@ -48,15 +62,7 @@ export class MapView {
   private gridVisible = false;
   private selection?: { x: number; y: number };
   onStats: (value: ViewStats) => void = () => {};
-  onTile: (
-    tile: {
-      x: number;
-      y: number;
-      ground: number;
-      object: number;
-      meta: number;
-    } | null,
-  ) => void = () => {};
+  onTile: (tile: SelectedCell | null) => void = () => {};
   constructor(private host: HTMLElement) {}
   async initialize() {
     await this.app.init({
@@ -220,6 +226,10 @@ export class MapView {
     this.sprites.clear();
     for (const item of this.cache.values()) item.texture.destroy(true);
     this.cache.clear();
+    this.trials.clear();
+    for (const entry of this.trialTextures.values())
+      entry.texture.destroy(true);
+    this.trialTextures.clear();
     this.failed.clear();
     this.infos.clear();
     this.overlay.clear();
@@ -265,6 +275,98 @@ export class MapView {
       });
     }
     this.schedule();
+  }
+  get trialCount() {
+    return this.trials.size;
+  }
+  private cellKey(x: number, y: number, layer: TileLayer) {
+    if (
+      !this.map ||
+      !Number.isInteger(x) ||
+      !Number.isInteger(y) ||
+      x < 0 ||
+      y < 0 ||
+      x >= this.map.header.width ||
+      y >= this.map.header.height
+    )
+      throw new Error("請先選擇有效地圖格位。");
+    return `${layer}:${y * this.map.header.width + x}`;
+  }
+  placement(x: number, y: number, layer: TileLayer) {
+    return this.trials.get(this.cellKey(x, y, layer));
+  }
+  place(
+    x: number,
+    y: number,
+    layer: TileLayer,
+    candidate: Candidate,
+    tile: DecodedTile,
+  ) {
+    const cell = this.cellKey(x, y, layer);
+    const original = this.map![layer][y * this.map!.header.width + x];
+    if (!original || candidate.mapId !== original || tile.mapId !== original)
+      throw new Error("候選 ID 與格位原始圖塊 ID 不符。");
+    if (this.trials.size >= 256 && !this.trials.has(cell))
+      throw new Error(
+        "每張地圖最多試放 256 處（各圖層分別計算），請先還原部分格位。",
+      );
+    const key = candidateKey(candidate);
+    if (!this.trialTextures.has(key)) {
+      const bytes = [...this.trialTextures.values()].reduce(
+        (n, t) => n + t.bytes,
+        0,
+      );
+      if (bytes + tile.rgba.byteLength > 128 * 1024 * 1024)
+        throw new Error("試放圖像已達 128 MiB 上限，請先清除部分試放。");
+      const source = new BufferImageSource({
+        resource: tile.rgba,
+        width: tile.width,
+        height: tile.height,
+        format: "rgba8unorm",
+        alphaMode: "no-premultiply-alpha",
+        scaleMode: "nearest",
+      });
+      this.trialTextures.set(key, {
+        texture: new Texture({ source }),
+        bytes: tile.rgba.byteLength,
+      });
+    }
+    this.removeSprite(cell);
+    this.trials.set(cell, candidate);
+    this.collectTrials();
+    this.schedule();
+  }
+  restore(x: number, y: number, layer: TileLayer) {
+    const cell = this.cellKey(x, y, layer);
+    this.removeSprite(cell);
+    this.trials.delete(cell);
+    this.collectTrials();
+    this.schedule();
+  }
+  restoreAll() {
+    for (const key of this.trials.keys()) this.removeSprite(key);
+    this.trials.clear();
+    this.collectTrials();
+    this.schedule();
+  }
+  private removeSprite(key: string) {
+    this.sprites.get(key)?.destroy();
+    this.sprites.delete(key);
+  }
+  private collectTrials() {
+    const used = new Set([...this.trials.values()].map(candidateKey));
+    for (const [key, entry] of this.trialTextures)
+      if (!used.has(key)) {
+        entry.texture.destroy(true);
+        this.trialTextures.delete(key);
+      }
+    this.overhang = 64;
+    for (const info of [...this.infos.values(), ...this.trials.values()])
+      this.overhang = Math.max(
+        this.overhang,
+        Math.abs(info.offX) + info.width,
+        Math.abs(info.offY) + info.height,
+      );
   }
   diagnostics() {
     return [...this.failed]
@@ -335,7 +437,9 @@ export class MapView {
             continue;
           const id = this.map[layer][i];
           if (!id) continue;
-          const info = this.infos.get(id);
+          const key = `${layer}:${i}`;
+          const trial = this.trials.get(key);
+          const info = trial ?? this.infos.get(id);
           const px = point.x - 32 + (info?.offX ?? 0),
             py = point.y - 23.5 + (info?.offY ?? 0);
           if (
@@ -349,13 +453,17 @@ export class MapView {
             limited = true;
             break outer;
           }
-          const key = `${layer}:${i}`;
           visible.add(key);
-          activeTextures.add(id);
           const cached = this.cache.get(id);
-          if (cached) cached.used = this.tick;
-          if (info && !cached && !this.failed.has(id)) needed.add(id);
-          const texture = cached?.texture ?? this.missingTexture;
+          if (!trial) {
+            activeTextures.add(id);
+            if (cached) cached.used = this.tick;
+            if (info && !cached && !this.failed.has(id)) needed.add(id);
+          }
+          const resolvedTexture = trial
+            ? this.trialTextures.get(candidateKey(trial))?.texture
+            : cached?.texture;
+          const texture = resolvedTexture ?? this.missingTexture;
           let sprite = this.sprites.get(key);
           if (!sprite) {
             sprite = new Sprite(texture);
@@ -364,10 +472,11 @@ export class MapView {
           }
           sprite.texture = texture;
           sprite.position.set(
-            cached ? px : point.x - 32,
-            cached ? py : point.y - 23.5,
+            resolvedTexture ? px : point.x - 32,
+            resolvedTexture ? py : point.y - 23.5,
           );
-          sprite.alpha = !cached && !this.failed.has(id) && info ? 0.25 : 1;
+          sprite.alpha =
+            !resolvedTexture && !this.failed.has(id) && info ? 0.25 : 1;
           sprite.zIndex = point.y;
         }
       }

@@ -8,6 +8,7 @@ import {
 } from "./resources/directory";
 import { ResourceClient } from "./resources/client";
 import { MapView } from "./viewer/map-view";
+import { CandidatePanel } from "./viewer/candidate-panel";
 
 const mark = `<svg viewBox="0 0 36 40" fill="none" aria-hidden="true"><path d="M18 2 34 11 18 20 2 11Z" stroke="currentColor" stroke-width="2"/><path d="m2 19 16 9 16-9M2 27l16 9 16-9" stroke="currentColor" stroke-width="2"/></svg>`;
 document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
@@ -46,6 +47,10 @@ const el = <T extends HTMLElement = HTMLElement>(id: string) =>
 const button = (id: string) => el<HTMLButtonElement>(id);
 const select = (id: string) => el<HTMLSelectElement>(id);
 const view = new MapView(el("viewport"));
+const candidatePanel = new CandidatePanel(el("viewport"), view);
+candidatePanel.onVisibility = (visible) => {
+  el("map-info").hidden = visible || !active;
+};
 let rendererReady: Promise<void> | undefined;
 let catalog: Catalog | undefined;
 let client: ResourceClient | undefined;
@@ -67,6 +72,7 @@ function busy(text?: string) {
   button("start").disabled = !!text;
 }
 function cancel() {
+  candidatePanel.dispose();
   operation++;
   client?.dispose();
   client = undefined;
@@ -250,6 +256,10 @@ async function start() {
     ]);
     if (token !== operation) return;
     active = true;
+    candidatePanel.configure(
+      catalog.sets,
+      catalog.palettes[Number(select("palette").value)].file,
+    );
     busy();
     el("welcome").hidden = true;
     el("layers").hidden = false;
@@ -294,7 +304,7 @@ async function openMap(path: string) {
     el("diagnostics-button").hidden = false;
     if (result.value.missing || result.value.invalid)
       message(
-        `這張地圖有 ${result.value.missing} 種圖塊未對應、${result.value.invalid} 種圖塊索引無效。可在「資源設定」切換資源集比對。`,
+        `這張地圖有 ${result.value.missing} 種圖塊未對應、${result.value.invalid} 種圖塊索引無效。可點選格位搜尋跨資源集候選並試放。`,
       );
     button("change-folder").textContent = "資源設定";
     button("change-folder").onclick = () => {
@@ -335,6 +345,7 @@ view.onStats = (stats) => {
       : `${stats.visible.toLocaleString()} 個可見圖塊${stats.failures ? ` · ${stats.failures} 種圖塊解碼失敗` : " · 載入完成"}`;
 };
 view.onTile = (tile) => {
+  candidatePanel.select(tile);
   el("cell-info").textContent = tile
     ? `座標 ${tile.x}, ${tile.y}\n地表 ${tile.ground} · 物件 ${tile.object}\n原始中繼資料 ${tile.meta}（0x${tile.meta.toString(16).padStart(4, "0")}）`
     : "點選地圖，查看格位資料";
@@ -356,7 +367,10 @@ document.addEventListener("keydown", (event) => {
     el("search").focus();
   }
 });
-window.addEventListener("pagehide", () => client?.dispose());
+window.addEventListener("pagehide", () => {
+  client?.dispose();
+  candidatePanel.dispose();
+});
 void savedDirectory()
   .then((handle) => {
     if (!handle || catalog) return;

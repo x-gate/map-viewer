@@ -63,4 +63,4 @@ GAME_ROOT=/本機絕對路徑/CGoriginmood bun run test:e2e
 
 ## 後續相容性工作
 
-目前不混合 base / Ex / V3 / Joy。跨集合成需要先研究來源覆蓋順序與 ID 關聯，不以數字版本自動取代舊圖塊。動畫、玩法 meta、碰撞判定及全量地圖逐像素驗證另行處理。升級 xglib 的欄位或解析語意時，先重建 bindings 並跑 WASM runtime 與端對端測試，再部署新的靜態產物。
+目前不自動混合 base / Ex / V3 / Joy；已新增的手動候選搜尋與逐格試放見 [候選試放紀錄](candidate-placement.md)。自動跨集合成仍需先研究來源覆蓋順序與 ID 關聯，不以數字版本自動取代舊圖塊。動畫、玩法 meta、碰撞判定及全量地圖逐像素驗證另行處理。升級 xglib 的欄位或解析語意時，先重建 bindings 並跑 WASM runtime 與端對端測試，再部署新的靜態產物。
