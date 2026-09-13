@@ -10,8 +10,9 @@
     "build": "bun run lint && bun run typecheck && vite build",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "format": "prettier --write src scripts tests index.html vite.config.ts README.md package.json",
+    "format": "prettier --write src scripts tests index.html vite.config.ts playwright.config.ts README.md package.json",
     "test": "bun test tests/unit",
+    "test:e2e": "bun run scripts/create-fixture.ts && playwright test",
     "preview": "vite preview --host 127.0.0.1 --port 8080"
   },
   "dependencies": {
