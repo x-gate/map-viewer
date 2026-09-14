@@ -9,7 +9,7 @@ test("imports a game root, renders WASM tiles and navigates maps", async ({
   const external: string[] = [];
   page.on("request", (r) => {
     if (
-      !r.url().startsWith("http://127.0.0.1:8080") &&
+      new URL(r.url()).hostname !== "127.0.0.1" &&
       !r.url().startsWith("data:")
     )
       external.push(r.url());
@@ -98,7 +98,7 @@ test("loads an external game root without uploading or changing resources", asyn
   const external: string[] = [];
   page.on("request", (r) => {
     if (
-      !r.url().startsWith("http://127.0.0.1:8080") &&
+      new URL(r.url()).hostname !== "127.0.0.1" &&
       !r.url().startsWith("data:")
     )
       external.push(r.url());

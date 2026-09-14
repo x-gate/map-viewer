@@ -35,7 +35,9 @@ export class MapView {
   private ready = false;
   private world = new Container();
   private ground = new Container();
+  private flatObjects = new Container();
   private objects = new Container();
+  private warnings = new Set<string>();
   private overlay = new Graphics();
   private highlight = new Graphics();
   private map?: GameMap;
@@ -84,19 +86,20 @@ export class MapView {
     this.objects.sortableChildren = true;
     this.world.addChild(
       this.ground,
+      this.flatObjects,
       this.objects,
       this.overlay,
       this.highlight,
     );
     const marker = document.createElement("canvas");
     marker.width = 64;
-    marker.height = 47;
+    marker.height = 48;
     const ctx = marker.getContext("2d")!;
     ctx.beginPath();
     ctx.moveTo(32, 0);
-    ctx.lineTo(64, 23.5);
-    ctx.lineTo(32, 47);
-    ctx.lineTo(0, 23.5);
+    ctx.lineTo(64, 24);
+    ctx.lineTo(32, 48);
+    ctx.lineTo(0, 24);
     ctx.closePath();
     ctx.fillStyle = "#66374b";
     ctx.fill();
@@ -206,14 +209,14 @@ export class MapView {
     const zoom = clampZoom(
       Math.min(
         (this.host.clientWidth - 80) / ((width + height) * 32),
-        (this.host.clientHeight - 100) / ((width + height) * 23.5),
+        (this.host.clientHeight - 100) / ((width + height) * 24),
         1,
       ),
     );
     this.world.scale.set(zoom);
     this.world.position.set(
       this.host.clientWidth / 2 - (height - width) * 16 * zoom,
-      this.host.clientHeight / 2 - (width + height) * 11.75 * zoom,
+      this.host.clientHeight / 2 - (width + height) * 12 * zoom,
     );
     this.schedule();
   }
@@ -231,6 +234,7 @@ export class MapView {
       entry.texture.destroy(true);
     this.trialTextures.clear();
     this.failed.clear();
+    this.warnings.clear();
     this.infos.clear();
     this.overlay.clear();
     this.highlight.clear();
@@ -369,9 +373,10 @@ export class MapView {
       );
   }
   diagnostics() {
-    return [...this.failed]
-      .map(([id, error]) => `圖塊 ${id}：${error}`)
-      .join("\n");
+    return [
+      ...this.warnings,
+      ...[...this.failed].map(([id, error]) => `圖塊 ${id}：${error}`),
+    ].join("\n");
   }
   private schedule() {
     if (this.queued) return;
@@ -383,9 +388,9 @@ export class MapView {
   }
   private diamond(graphic: Graphics, x: number, y: number) {
     graphic
-      .moveTo(x, y - 23.5)
+      .moveTo(x, y - 24)
       .lineTo(x + 32, y)
-      .lineTo(x, y + 23.5)
+      .lineTo(x, y + 24)
       .lineTo(x - 32, y)
       .closePath();
   }
@@ -428,8 +433,8 @@ export class MapView {
           count < 12000 &&
           point.x >= left + pad - 64 &&
           point.x <= right - pad + 64 &&
-          point.y >= top + pad - 47 &&
-          point.y <= bottom - pad + 47
+          point.y >= top + pad - 48 &&
+          point.y <= bottom - pad + 48
         )
           this.diamond(this.overlay, point.x, point.y);
         for (const layer of ["ground", "object"] as const) {
@@ -441,11 +446,11 @@ export class MapView {
           const trial = this.trials.get(key);
           const info = trial ?? this.infos.get(id);
           const px = point.x - 32 + (info?.offX ?? 0),
-            py = point.y - 23.5 + (info?.offY ?? 0);
+            py = point.y - 24 + (info?.offY ?? 0);
           if (
             px + (info?.width ?? 64) < left + pad ||
             px > right - pad ||
-            py + (info?.height ?? 47) < top + pad ||
+            py + (info?.height ?? 48) < top + pad ||
             py > bottom - pad
           )
             continue;
@@ -467,13 +472,18 @@ export class MapView {
           let sprite = this.sprites.get(key);
           if (!sprite) {
             sprite = new Sprite(texture);
-            (layer === "ground" ? this.ground : this.objects).addChild(sprite);
+            (layer === "ground"
+              ? this.ground
+              : info?.asGround
+                ? this.flatObjects
+                : this.objects
+            ).addChild(sprite);
             this.sprites.set(key, sprite);
           }
           sprite.texture = texture;
           sprite.position.set(
             resolvedTexture ? px : point.x - 32,
-            resolvedTexture ? py : point.y - 23.5,
+            resolvedTexture ? py : point.y - 24,
           );
           sprite.alpha =
             !resolvedTexture && !this.failed.has(id) && info ? 0.25 : 1;
@@ -511,6 +521,8 @@ export class MapView {
         .then((result) => {
           if (epoch !== this.epoch || result.kind !== "tiles") return;
           for (const tile of result.tiles) {
+            for (const warning of tile.warnings ?? [])
+              this.warnings.add(`圖塊 ${tile.mapId}：${warning}`);
             const source = new BufferImageSource({
               resource: tile.rgba,
               width: tile.width,

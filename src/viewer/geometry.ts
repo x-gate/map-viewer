@@ -1,6 +1,7 @@
-// Reference-viewer convention, not a verified official projection specification.
+// CGTool example Scene/5.Map.unity uses a 64 x 48 isometric grid.
+// Coordinates remain raw file coordinates; the row flip is folded into projection.
 export const TILE_WIDTH = 64;
-export const TILE_HEIGHT = 47;
+export const TILE_HEIGHT = 48;
 export function tilePosition(x: number, y: number, width: number) {
   const col = y,
     row = width - 1 - x;

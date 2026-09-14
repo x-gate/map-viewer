@@ -7,6 +7,7 @@ export function readTileInfo(bytes: Uint8Array, row: number): TileInfo {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   return {
     mapId: view.getInt32(36, true),
+    asGround: view.getUint8(31) === 1,
     row,
     id: view.getInt32(0, true),
     addr: view.getUint32(4, true),
@@ -46,10 +47,11 @@ export async function decodeTile(
   if (bytes.byteLength !== info.len)
     throw new Error("圖像檔案已變更或資料長度不足，請重新選擇資料夾。");
   const header = new DataView(bytes.buffer);
-  const width = header.getInt32(4, true),
-    height = header.getInt32(8, true);
-  if (width !== info.width || height !== info.height)
-    throw new Error(`索引列 ${info.row} 的圖像尺寸與 RD header 不符。`);
+  const { width, height } = info;
+  const warnings =
+    header.getInt32(4, true) !== width || header.getInt32(8, true) !== height
+      ? [`索引列 ${info.row} 的 RD 尺寸不同，依 CGTool 使用 GraphicInfo 尺寸。`]
+      : [];
   const graphic = parser.graphic_strict_build_from_cgp(index, bytes, palette);
   const rgba = new Uint8Array(width * height * 4);
   for (let i = 0; i < graphic.payload.length; i++) {
@@ -60,5 +62,5 @@ export async function decodeTile(
       ((height - 1 - Math.floor(i / width)) * width + (i % width)) * 4;
     rgba.set([color.red, color.green, color.blue, color.alpha], destination);
   }
-  return { mapId: info.mapId, width, height, rgba };
+  return { mapId: info.mapId, width, height, rgba, warnings };
 }

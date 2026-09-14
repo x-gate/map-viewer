@@ -52,7 +52,7 @@ export class ResourceSession {
       invalid = 0;
     const tiles: TileInfo[] = [];
     for (const id of ids) {
-      const info = this.tiles.get(id)?.[0];
+      const info = this.tiles.get(id)?.slice(-1)[0];
       if (!info) missing++;
       else if (!validTileInfo(info, this.data.size)) invalid++;
       else tiles.push(info);
@@ -60,7 +60,7 @@ export class ResourceSession {
     return { map, tiles, missing, invalid, duplicates: this.duplicates };
   }
   async decode(mapId: number): Promise<DecodedTile> {
-    const info = this.tiles.get(mapId)?.[0];
+    const info = this.tiles.get(mapId)?.slice(-1)[0];
     if (!info) throw new Error("找不到有效圖塊索引或已超過圖像資源上限。");
     return decodeTile(
       this.parser,

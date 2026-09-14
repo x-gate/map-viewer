@@ -11,6 +11,7 @@ export interface TileInfo {
   width: number;
   height: number;
   mapId: number;
+  asGround?: boolean;
 }
 export interface OpenResult {
   map: GameMap;
@@ -24,6 +25,7 @@ export interface DecodedTile {
   width: number;
   height: number;
   rgba: Uint8Array;
+  warnings?: string[];
 }
 export type TileLayer = "ground" | "object";
 export interface SelectedCell {

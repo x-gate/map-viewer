@@ -1,5 +1,7 @@
 # WASM 與地圖檢視器整合紀錄
 
+> 後續修正：目前行為以 [CGTool 對照](cgtool-audit.md) 為準；以下保留歷史整合紀錄。
+
 日期：2026-09-13。變更 repository：`map-viewer`；`xglib` 原始碼與工作樹均未修改。
 
 ## 背景與決策

@@ -40,7 +40,7 @@ document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
   </div>
   <footer class="app-footer"><span>非官方地圖研究工具 · 遊戲名稱與商標屬各權利人</span><span>PixiJS <span class="footer-dot">＋</span> xglib WASM</span></footer>
   <input id="folder-input" type="file" webkitdirectory multiple hidden aria-label="選擇遊戲根目錄">
-  <dialog id="diagnostics"><div class="dialog-title"><h2>資源診斷</h2><button id="close-diagnostics" class="icon-button" aria-label="關閉診斷">×</button></div><p>缺少或解碼失敗的圖塊以粉色菱形標示。重複圖塊採用所選資源集的第一筆索引列，此為檢視器的暫定策略。</p><pre id="diagnostics-text"></pre><p class="hint">原始中繼資料（meta）的玩法語意尚未驗證，不視為碰撞判定。</p></dialog>`;
+  <dialog id="diagnostics"><div class="dialog-title"><h2>資源診斷</h2><button id="close-diagnostics" class="icon-button" aria-label="關閉診斷">×</button></div><p>缺少或解碼失敗的圖塊以粉色菱形標示。重複圖塊採用所選資源集的最後一筆索引列，此為檢視器的暫定策略。</p><pre id="diagnostics-text"></pre><p class="hint">原始中繼資料（meta）的玩法語意尚未驗證，不視為碰撞判定。</p></dialog>`;
 
 const el = <T extends HTMLElement = HTMLElement>(id: string) =>
   document.getElementById(id) as T;

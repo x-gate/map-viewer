@@ -9,7 +9,7 @@ test("previews cross-source candidates, places only the chosen cell, and restore
   const external: string[] = [];
   page.on("request", (r) => {
     if (
-      !r.url().startsWith("http://127.0.0.1:8080") &&
+      new URL(r.url()).hostname !== "127.0.0.1" &&
       !r.url().startsWith("data:")
     )
       external.push(r.url());
@@ -25,7 +25,7 @@ test("previews cross-source candidates, places only the chosen cell, and restore
   // Source cell (0,0) has ground 1 / object 2; initial map is 12 x 10 at scale 1.
   const target = {
     x: box.x + box.width / 2 - 320,
-    y: box.y + box.height / 2 + 23.5,
+    y: box.y + box.height / 2 + 24,
   };
   await page.mouse.click(target.x, target.y);
   const panel = page.getByRole("region", { name: "圖塊候選與試放" });
@@ -80,13 +80,13 @@ test("previews cross-source candidates, places only the chosen cell, and restore
     .poll(async () => !(await page.screenshot({ clip })).equals(before))
     .toBe(true);
   // Another cell with the same object ID stays original; overrides are keyed by cell and layer.
-  await page.mouse.click(target.x + 192, target.y - 94);
+  await page.mouse.click(target.x + 192, target.y - 96);
   await expect(panel.locator('[data-id="cell"]')).toContainText("座標 (5, 1)");
   await expect(panel.locator('[data-id="placement"]')).toContainText(
     "此格此層使用原始內容｜本圖 1 處試放",
   );
   // Selecting an adjacent cell with the same ground must not propagate this override.
-  await page.mouse.click(target.x + 32, target.y - 23.5);
+  await page.mouse.click(target.x + 32, target.y - 24);
   await expect(panel.locator('[data-id="cell"]')).toContainText("座標 (1, 0)");
   await expect(panel.locator('[data-id="placement"]')).toContainText(
     "此格此層使用原始內容｜本圖 1 處試放",

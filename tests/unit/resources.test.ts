@@ -4,6 +4,7 @@ import { initSync } from "../../.generated/xglib/xglib.js";
 import * as bindings from "../../.generated/xglib/xglib.js";
 import type * as Contract from "../../.generated/xglib/contract";
 import { discover } from "../../src/resources/catalog";
+import { readTileInfo } from "../../src/resources/graphic";
 import { ResourceSession } from "../../src/resources/session";
 import { tilePosition, screenTile, clampZoom } from "../../src/viewer/geometry";
 import {
@@ -91,7 +92,7 @@ describe("real WASM bindings", () => {
       await s.open(new File([mapBytes(2, 2, 999)], "missing.dat")),
     ).toMatchObject({ missing: 1 });
   });
-  test("retains duplicate rows with an explicit first-row policy", async () => {
+  test("retains duplicate rows with an explicit last-row policy", async () => {
     const c = catalog(),
       info = infoBytes();
     const repeated = new Uint8Array(80);
@@ -107,9 +108,9 @@ describe("real WASM bindings", () => {
         c.palettes[0].file,
       ),
     ).toEqual({ count: 1, duplicates: 1 });
-    expect((await s.open(c.maps[0].file)).tiles[0].row).toBe(0);
+    expect((await s.open(c.maps[0].file)).tiles[0].row).toBe(1);
   });
-  test("rejects inconsistent RD dimensions before decoding", async () => {
+  test("uses GraphicInfo dimensions and diagnoses inconsistent RD dimensions", async () => {
     const c = catalog(),
       bytes = graphicBytes();
     new DataView(bytes.buffer).setInt32(4, 1, true);
@@ -121,7 +122,9 @@ describe("real WASM bindings", () => {
       },
       c.palettes[0].file,
     );
-    await expect(s.decode(1)).rejects.toThrow("尺寸與 RD header 不符");
+    const tile = await s.decode(1);
+    expect(tile.width).toBe(64);
+    expect(tile.warnings?.[0]).toContain("GraphicInfo");
   });
   test("excludes out-of-range index addresses", async () => {
     const c = catalog(),
@@ -181,4 +184,68 @@ describe("projection", () => {
     expect(clampZoom(0)).toBe(0.08);
     expect(clampZoom(10)).toBe(4);
   });
+});
+
+test("CGTool map grid spacing is 64 x 48, independent of a 47-pixel image", () => {
+  const origin = tilePosition(0, 0, 7),
+    east = tilePosition(1, 0, 7),
+    south = tilePosition(0, 1, 7);
+  expect([east.x - origin.x, east.y - origin.y]).toEqual([32, -24]);
+  expect([south.x - origin.x, south.y - origin.y]).toEqual([32, 24]);
+});
+test("GraphicInfo byte 31 marks flat objects without changing their source row", () => {
+  const bytes = infoBytes();
+  bytes[31] = 1;
+  expect(readTileInfo(bytes, 9)).toMatchObject({ row: 9, asGround: true });
+  bytes[31] = 2;
+  expect(readTileInfo(bytes, 9).asGround).toBe(false);
+});
+test("map tiles inherit CGP when a high-version record has an empty embedded palette", async () => {
+  const c = catalog(),
+    s = new ResourceSession(parser);
+  const bytes = new Uint8Array(21),
+    header = new DataView(bytes.buffer);
+  bytes.set([82, 68, 2]);
+  header.setInt32(4, 1, true);
+  header.setInt32(8, 1, true);
+  header.setInt32(12, 21, true);
+  bytes[20] = 16;
+  await s.initialize(
+    {
+      name: "empty-palette",
+      info: {
+        path: "info",
+        file: new File([infoBytes(1, 0, 21, 1, 1)], "info"),
+      },
+      data: { path: "data", file: new File([bytes], "data") },
+    },
+    c.palettes[0].file,
+  );
+  expect([...(await s.decode(1)).rgba]).toEqual([115, 145, 91, 255]);
+});
+
+test("WASM decodes CGTool long-literal aliases and the corrected fixed colors", async () => {
+  const bytes = new Uint8Array(22),
+    header = new DataView(bytes.buffer);
+  bytes.set([82, 68, 1]);
+  header.setInt32(4, 2, true);
+  header.setInt32(8, 1, true);
+  header.setInt32(12, 21, true);
+  bytes.set([0x40, 0, 2, 4, 5, 0x80], 16); // Last byte is outside RD DataLen.
+  const c = catalog(),
+    s = new ResourceSession(parser);
+  await s.initialize(
+    {
+      name: "rle",
+      info: {
+        path: "info",
+        file: new File([infoBytes(1, 0, 22, 2, 1)], "info"),
+      },
+      data: { path: "data", file: new File([bytes], "data") },
+    },
+    c.palettes[0].file,
+  );
+  expect([...(await s.decode(1)).rgba]).toEqual([
+    128, 0, 128, 255, 0, 0, 128, 255,
+  ]);
 });

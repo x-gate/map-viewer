@@ -188,7 +188,10 @@ export class CandidatePanel {
           if (token !== this.sequence || decoded.kind !== "candidate-decode")
             return;
           this.preview(entry.canvas, decoded.tile);
-          entry.status.textContent = "解碼成功";
+          entry.status.textContent = [
+            "解碼成功",
+            ...(decoded.tile.warnings ?? []),
+          ].join("；");
           entry.button.disabled = false;
         } catch (error) {
           if (token !== this.sequence) return;

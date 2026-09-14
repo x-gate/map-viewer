@@ -4,7 +4,7 @@
 
 ## 開始使用
 
-需要 Bun（本次驗證 1.4.2）、支援 edition 2024 的 Rust、`wasm32-unknown-unknown` target，以及與 `xglib/Cargo.lock` 相同版本的 `wasm-bindgen-cli`（目前 0.2.118）。建置時需要同工作區的 `../xglib`；整合基準為 `b111040f69ee27bbd24667be6acebf0d443e3b79`。
+需要 Bun（本次驗證 1.4.2）、支援 edition 2024 的 Rust、`wasm32-unknown-unknown` target，以及與 `xglib/Cargo.lock` 相同版本的 `wasm-bindgen-cli`（目前 0.2.118）。建置時需要同工作區的 `../xglib`；整合基準為 `d1480b4`。
 
 在本 repository 執行：
 
@@ -63,6 +63,7 @@ bun run typecheck   # TypeScript 嚴格檢查
 bun run test        # 合成資源 + 真實 WASM runtime 單元測試
 bun run test:e2e    # Chrome 端對端測試；自動產生原創測試資源
 bun run build       # lint + typecheck + Vite 正式建置
+E2E_PREVIEW=1 bun run test:e2e  # 正式 dist，獨立使用 8083
 bun run preview     # 預覽 dist，127.0.0.1:8080
 bun run format      # 格式化維護中的程式碼與文件
 ```
@@ -95,7 +96,7 @@ audit 輸出選定四個來源檔的 SHA-256、地圖尺寸、圖塊統計、解
 
 ## 相容性與界限
 
-目前支援一組基礎圖像資源集、靜態地表與物件，以及手動跨資源集試放。尚無動畫、自動來源合成、碰撞模擬或完整遊戲邏輯。格距 64 × 47、旋轉、圖像垂直翻轉與物件深度排序沿用參考檢視器慣例；不是官方規格保證。原始內容暫採所選資源集的第一筆同號索引列；候選則保留所有來源與重複列，不聲稱同號就是原作對應。
+目前支援一組基礎圖像資源集、靜態地表與物件，以及手動跨資源集試放。格距依 CGTool 修正為 64 × 48，原始檔案座標與圖像垂直翻轉保持；AsGround 物件位於一般物件下方。同一來源重複 map_id 使用末列，候選仍保留全部來源與索引列。尚無動畫、自動來源合成、碰撞模擬或完整跨格遮擋；詳見 [CGTool 對照](docs/cgtool-audit.md)。
 
 試放以「地圖格位＋圖層」記錄，最多 256 處；試放紋理另有 128 MiB 上限。搜尋索引在獨立 Worker 中建立，只讀取本頁及試放所需的圖像切片，並使用目前選定的 CGP（具有內嵌調色盤的格式仍由 xglib 判讀）。詳細規則見 [候選試放紀錄](docs/candidate-placement.md)。
 
