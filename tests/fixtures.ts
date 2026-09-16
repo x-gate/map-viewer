@@ -42,6 +42,9 @@ export function infoBytes(
   view.setInt32(0, id, true);
   view.setUint32(4, addr, true);
   view.setInt32(8, length, true);
+  // GraphicInfo offsets already position the image relative to its cell center.
+  view.setInt32(12, -32, true);
+  view.setInt32(16, -24, true);
   view.setInt32(20, width, true);
   view.setInt32(24, height, true);
   bytes[28] = 1;
@@ -106,5 +109,19 @@ export function candidateResources() {
   files.set("Assets/bin/Graphic_3.bin", graphicBytes());
   files.set("Assets/bin/GraphicInfo_bad.bin", new Uint8Array(41));
   files.set("Assets/bin/Graphic_bad.bin", new Uint8Array(20));
+  return files;
+}
+
+export function coordinateResources() {
+  const files = syntheticResources();
+  for (const path of files.keys())
+    if (path.startsWith("Assets/map/")) files.delete(path);
+  const map = mapBytes(30, 30);
+  const data = new DataView(map.buffer);
+  const objectStart = 20 + 30 * 30 * 2;
+  map.fill(0, objectStart, objectStart + 30 * 30 * 2);
+  // Original synthetic marker at the reported coordinate; no game assets copied.
+  data.setUint16(objectStart + (16 * 30 + 19) * 2, 2, true);
+  files.set("Assets/map/0/1011.dat", map);
   return files;
 }

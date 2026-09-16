@@ -445,8 +445,10 @@ export class MapView {
           const key = `${layer}:${i}`;
           const trial = this.trials.get(key);
           const info = trial ?? this.infos.get(id);
-          const px = point.x - 32 + (info?.offX ?? 0),
-            py = point.y - 24 + (info?.offY ?? 0);
+          // GraphicInfo offsets already include the image's cell-center anchor.
+          // Subtracting another half tile shifts the artwork into (x, y - 1).
+          const px = point.x + (info?.offX ?? -32),
+            py = point.y + (info?.offY ?? -24);
           if (
             px + (info?.width ?? 64) < left + pad ||
             px > right - pad ||

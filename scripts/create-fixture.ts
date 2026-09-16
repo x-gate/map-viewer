@@ -1,9 +1,14 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
-import { syntheticResources, candidateResources } from "../tests/fixtures";
+import {
+  syntheticResources,
+  candidateResources,
+  coordinateResources,
+} from "../tests/fixtures";
 for (const [name, resources] of [
   ["fixture-game", syntheticResources()],
   ["fixture-candidates", candidateResources()],
+  ["fixture-coordinates", coordinateResources()],
 ] as const) {
   for (const [path, bytes] of resources) {
     const target = resolve(import.meta.dir, `../.generated/${name}`, path);
