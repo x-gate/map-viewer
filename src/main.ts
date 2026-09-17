@@ -9,6 +9,7 @@ import {
 import { ResourceClient } from "./resources/client";
 import { MapView } from "./viewer/map-view";
 import { CandidatePanel } from "./viewer/candidate-panel";
+import { NpcPanel } from "./viewer/npc-panel";
 
 const mark = `<svg viewBox="0 0 36 40" fill="none" aria-hidden="true"><path d="M18 2 34 11 18 20 2 11Z" stroke="currentColor" stroke-width="2"/><path d="m2 19 16 9 16-9M2 27l16 9 16-9" stroke="currentColor" stroke-width="2"/></svg>`;
 document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
@@ -30,7 +31,7 @@ document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
           <button id="compatible-picker" class="text-button">改用相容模式選取資料夾</button><div id="setup" class="setup" hidden><div class="setup-heading"><span class="accent">✓ 資源已就緒</span><span id="setup-count"></span></div><div class="setup-fields"><label>圖像資源集<select id="resource-set"></select></label><label>調色盤<select id="palette"></select></label></div><p class="hint">不同資源集分開檢視，可切換比對缺少的圖塊。</p><button id="start" class="button primary">開啟地圖檢視器 →</button></div>
           <div class="welcome-notes"><span>01 選擇含 Assets 的根目錄</span><span>02 自動辨識資源</span><span>03 開啟地圖</span></div><p class="privacy-note">資源不會上傳，也不會修改原始檔案。</p>
         </section>
-        <fieldset id="layers" class="layer-controls" hidden><legend>顯示圖層</legend><label><input id="ground" type="checkbox" checked>地表</label><label><input id="objects" type="checkbox" checked>物件</label><label><input id="grid" type="checkbox">格線</label></fieldset>
+        <fieldset id="layers" class="layer-controls" hidden><legend>顯示圖層</legend><label><input id="ground" type="checkbox" checked>地表</label><label><input id="objects" type="checkbox" checked>物件</label><label><input id="npcs" type="checkbox" checked>NPC</label><label><input id="grid" type="checkbox">格線</label><button id="npc-settings" class="text-button">NPC 設定</button></fieldset>
         <div id="map-info" class="map-info" hidden><span class="eyebrow">地圖資訊</span><div id="dimensions">—</div><p id="cell-info">點選地圖，查看格位資料</p></div>
         <div id="busy" class="busy" role="status" hidden><span class="spinner"></span><span id="busy-text">正在載入…</span><button id="cancel" class="text-button">取消</button></div>
         <div id="message" class="message" role="alert" hidden><span id="message-text"></span><button id="dismiss-message" class="icon-button" aria-label="關閉訊息">×</button></div>
@@ -48,6 +49,7 @@ const button = (id: string) => el<HTMLButtonElement>(id);
 const select = (id: string) => el<HTMLSelectElement>(id);
 const view = new MapView(el("viewport"));
 const candidatePanel = new CandidatePanel(el("viewport"), view);
+const npcPanel = new NpcPanel(view, button("npc-settings"));
 candidatePanel.onVisibility = (visible) => {
   el("map-info").hidden = visible || !active;
 };
@@ -72,6 +74,7 @@ function busy(text?: string) {
   button("start").disabled = !!text;
 }
 function cancel() {
+  npcPanel.pause();
   candidatePanel.dispose();
   operation++;
   client?.dispose();
@@ -93,6 +96,7 @@ function cancel() {
 }
 function useCatalog(value: Catalog) {
   cancel();
+  npcPanel.reset();
   catalog = value;
   el("folder-name").textContent = value.root;
   el("source-summary").textContent =
@@ -260,6 +264,11 @@ async function start() {
       catalog.sets,
       catalog.palettes[Number(select("palette").value)].file,
     );
+    npcPanel.configure(
+      catalog,
+      Number(select("resource-set").value),
+      catalog.palettes[Number(select("palette").value)].file,
+    );
     busy();
     el("welcome").hidden = true;
     el("layers").hidden = false;
@@ -288,6 +297,7 @@ async function openMap(path: string) {
     selectedPath = path;
     view.open(result.value, client);
     const { width, height } = result.value.map.header;
+    npcPanel.openMap(path, width, height);
     el("map-title").textContent =
       `地圖 ${file.file.name.replace(/\.dat$/i, "")}`;
     el("map-path").textContent = path;
@@ -329,6 +339,8 @@ button("zoom-in").onclick = () => view.setZoom(view.zoom * 1.25);
 button("zoom-out").onclick = () => view.setZoom(view.zoom / 1.25);
 button("zoom-value").onclick = () => view.setZoom(1);
 button("fit").onclick = () => view.fit();
+el<HTMLInputElement>("npcs").onchange = () =>
+  view.npcVisible(el<HTMLInputElement>("npcs").checked);
 for (const id of ["ground", "objects", "grid"])
   el<HTMLInputElement>(id).onchange = () =>
     view.layers(
@@ -346,6 +358,7 @@ view.onStats = (stats) => {
 };
 view.onTile = (tile) => {
   candidatePanel.select(tile);
+  candidatePanel.npcInfo(tile ? npcPanel.selected(tile.x, tile.y) : "");
   el("cell-info").textContent = tile
     ? `座標 ${tile.x}, ${tile.y}\n地表 ${tile.ground} · 物件 ${tile.object}\n原始中繼資料 ${tile.meta}（0x${tile.meta.toString(16).padStart(4, "0")}）`
     : "點選地圖，查看格位資料";
@@ -368,6 +381,7 @@ document.addEventListener("keydown", (event) => {
   }
 });
 window.addEventListener("pagehide", () => {
+  npcPanel.pause();
   client?.dispose();
   candidatePanel.dispose();
 });

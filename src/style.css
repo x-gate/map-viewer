@@ -538,6 +538,8 @@ select {
   padding: 12px;
 }
 .layer-controls {
+  flex-wrap: wrap;
+  max-width: calc(100% - 44px);
   position: absolute;
   z-index: 1;
   top: 20px;
@@ -1207,5 +1209,85 @@ pre {
   }
   .candidate-pagination .button {
     padding: 5px 7px;
+  }
+}
+
+#npc-dialog {
+  width: min(780px, 92vw);
+  max-height: 85vh;
+  overflow: auto;
+}
+#npc-dialog .hint {
+  line-height: 1.7;
+}
+.npc-file {
+  display: grid;
+  gap: 10px;
+  font-size: 12px;
+  padding: 14px 0;
+}
+.npc-file input {
+  max-width: 100%;
+  color: #b5cbbb;
+}
+.npc-settings {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.npc-settings label {
+  display: grid;
+  gap: 8px;
+  font-size: 12px;
+}
+.npc-settings select {
+  width: 100%;
+  min-width: 0;
+}
+.npc-actions {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+  margin: 14px 0;
+}
+#npc-dialog [role="status"] {
+  font-size: 12px;
+  color: #a5c9b3;
+  line-height: 1.7;
+}
+.npc-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.npc-row {
+  border: 1px solid #344d3e;
+  border-radius: 8px;
+  padding: 12px;
+  background: #122018;
+}
+.npc-row strong {
+  color: #ffdc9e;
+  font-size: 13px;
+}
+.npc-row p {
+  font-size: 11px;
+  line-height: 1.7;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.npc-source {
+  color: #8fb39a;
+}
+.npc-warning {
+  color: #e1b792;
+  white-space: pre-line;
+  font-size: 11px;
+  line-height: 1.7;
+}
+@media (max-width: 640px) {
+  .npc-settings,
+  .npc-list {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

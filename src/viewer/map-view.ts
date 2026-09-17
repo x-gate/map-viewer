@@ -18,6 +18,9 @@ import type {
   TileInfo,
 } from "../resources/protocol";
 import { clampZoom, screenTile, tilePosition } from "./geometry";
+import { NpcLayer } from "./npc-layer";
+import type { NpcRecord } from "../resources/npc";
+import type { NpcAppearance } from "../resources/npc-appearance";
 interface Cached {
   texture: Texture;
   bytes: number;
@@ -37,6 +40,8 @@ export class MapView {
   private ground = new Container();
   private flatObjects = new Container();
   private objects = new Container();
+  private npcs = new NpcLayer(this.objects);
+  private npcTimer?: ReturnType<typeof setTimeout>;
   private warnings = new Set<string>();
   private overlay = new Graphics();
   private highlight = new Graphics();
@@ -221,6 +226,8 @@ export class MapView {
     this.schedule();
   }
   clear() {
+    clearTimeout(this.npcTimer);
+    this.npcs.clear();
     this.epoch++;
     this.map = undefined;
     this.client = undefined;
@@ -282,6 +289,27 @@ export class MapView {
   }
   get trialCount() {
     return this.trials.size;
+  }
+  setNpcs(records: NpcRecord[]) {
+    if (this.map) this.npcs.set(records, this.map.header.width);
+    this.schedule();
+  }
+  npcAppearance(key: string, value: NpcAppearance) {
+    this.npcs.appearance(key, value);
+    this.schedule();
+  }
+  npcVisible(visible: boolean) {
+    this.npcs.visible = visible;
+    this.schedule();
+  }
+  focusCell(x: number, y: number) {
+    if (!this.map) return;
+    const p = tilePosition(x, y, this.map.header.width);
+    this.world.position.set(
+      this.host.clientWidth / 2 - p.x * this.zoom,
+      this.host.clientHeight / 2 - p.y * this.zoom,
+    );
+    this.select(x, y);
   }
   private cellKey(x: number, y: number, layer: TileLayer) {
     if (
@@ -395,6 +423,7 @@ export class MapView {
       .closePath();
   }
   private render() {
+    clearTimeout(this.npcTimer);
     if (!this.ready) return;
     if (!this.map) {
       this.app.render();
@@ -506,6 +535,16 @@ export class MapView {
         this.sprites.delete(key);
       }
     this.evict(activeTextures);
+    const animated = this.npcs.render(
+      performance.now(),
+      {
+        left: left + pad,
+        top: top + pad,
+        right: right - pad,
+        bottom: bottom - pad,
+      },
+      this.zoom,
+    );
     this.onStats({
       zoom: this.zoom,
       visible: this.sprites.size,
@@ -514,6 +553,7 @@ export class MapView {
       loading: !!needed.size || this.busy,
     });
     this.app.render();
+    if (animated) this.npcTimer = setTimeout(() => this.schedule(), 33);
     if (needed.size && !this.busy && this.client) {
       this.busy = true;
       const epoch = this.epoch;

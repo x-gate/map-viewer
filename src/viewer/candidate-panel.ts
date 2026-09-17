@@ -29,7 +29,7 @@ export class CandidatePanel {
     this.host.setAttribute("aria-label", "圖塊候選與試放");
     this.host.innerHTML = `
       <div class="candidate-heading"><div><span class="eyebrow">跨資源集比對</span><h2>圖塊候選</h2></div><button data-id="close" class="icon-button" aria-label="關閉圖塊候選">×</button></div>
-      <p data-id="cell" class="candidate-cell"></p>
+      <p data-id="cell" class="candidate-cell"></p><p data-id="npc" class="hint" hidden></p>
       <fieldset class="candidate-layer"><legend>搜尋與試放圖層</legend><label><input type="radio" name="candidate-layer" value="ground">地表</label><label><input type="radio" name="candidate-layer" value="object" checked>物件</label></fieldset>
       <p data-id="rule" class="hint"></p><p class="hint candidate-note">同號候選不代表原作對應。試放僅影響此格；切換地圖或資源設定時清除。</p>
       <p data-id="status" class="candidate-status" role="status"></p><p data-id="warnings" class="candidate-warning" hidden></p>
@@ -62,6 +62,10 @@ export class CandidatePanel {
   }
   private el<T extends HTMLElement = HTMLElement>(id: string) {
     return this.host.querySelector<T>(`[data-id="${id}"]`)!;
+  }
+  npcInfo(text: string) {
+    this.el("npc").hidden = !text;
+    this.el("npc").textContent = `NPC：${text}`;
   }
   private button(id: string) {
     return this.el<HTMLButtonElement>(id);
