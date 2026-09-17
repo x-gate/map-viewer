@@ -1,5 +1,7 @@
 import type { Map as GameMap } from "../../.generated/xglib/contract";
 import type { ResourceSet } from "./catalog";
+import type { NpcFile } from "./npc";
+import type { NpcAppearance } from "./npc-appearance";
 export type { GameMap };
 export interface TileInfo {
   id: number;
@@ -54,6 +56,14 @@ export function candidateKey(ref: CandidateRef) {
   return JSON.stringify([ref.source, ref.row]);
 }
 export type Request =
+  | { kind: "npc-file"; file: File; encoding: string }
+  | {
+      kind: "npc-init";
+      graphic: ResourceSet;
+      anime?: ResourceSet;
+      palette: File;
+    }
+  | { kind: "npc-appearance"; image: number; direction: number }
   | { kind: "candidate-init"; sets: ResourceSet[]; palette: File }
   | { kind: "candidates"; mapId: number; offset: number }
   | { kind: "candidate-decode"; ref: CandidateRef }
@@ -61,6 +71,9 @@ export type Request =
   | { kind: "map"; file: File }
   | { kind: "tiles"; ids: number[] };
 export type Result =
+  | { kind: "npc-file"; value: NpcFile }
+  | { kind: "npc-init" }
+  | { kind: "npc-appearance"; value: NpcAppearance }
   | { kind: "candidate-init" }
   | { kind: "candidates"; value: CandidatePage }
   | { kind: "candidate-decode"; candidate: Candidate; tile: DecodedTile }

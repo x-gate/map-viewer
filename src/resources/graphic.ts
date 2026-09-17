@@ -38,6 +38,7 @@ export async function decodeTile(
   info: TileInfo,
   data: File,
   palette: Uint8Array,
+  options: { rawPalette?: Uint8Array; transparentZero?: boolean } = {},
 ): Promise<DecodedTile> {
   if (!validTileInfo(info, data.size))
     throw new Error("找不到有效圖塊索引或已超過圖像資源上限。");
@@ -52,15 +53,28 @@ export async function decodeTile(
     header.getInt32(4, true) !== width || header.getInt32(8, true) !== height
       ? [`索引列 ${info.row} 的 RD 尺寸不同，依 CGTool 使用 GraphicInfo 尺寸。`]
       : [];
-  const graphic = parser.graphic_strict_build_from_cgp(index, bytes, palette);
+  const graphic = options.rawPalette
+    ? parser.graphic_strict_build_from_bytes(index, bytes, options.rawPalette)
+    : parser.graphic_strict_build_from_cgp(index, bytes, palette);
   const rgba = new Uint8Array(width * height * 4);
+  const colors = options.rawPalette
+    ? parser.game_palette_build_from_bytes(options.rawPalette).colors
+    : graphic.palette.colors;
   for (let i = 0; i < graphic.payload.length; i++) {
-    const color = graphic.palette.colors[graphic.payload[i]];
+    const color = colors[graphic.payload[i]];
     if (!color) throw new Error("圖像色彩索引超出調色盤。");
     // xglib preserves bottom-up source rows; display uses top-down RGBA.
     const destination =
       ((height - 1 - Math.floor(i / width)) * width + (i % width)) * 4;
-    rgba.set([color.red, color.green, color.blue, color.alpha], destination);
+    rgba.set(
+      [
+        color.red,
+        color.green,
+        color.blue,
+        options.transparentZero && graphic.payload[i] === 0 ? 0 : color.alpha,
+      ],
+      destination,
+    );
   }
   return { mapId: info.mapId, width, height, rgba, warnings };
 }

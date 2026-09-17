@@ -125,3 +125,112 @@ export function coordinateResources() {
   files.set("Assets/map/0/1011.dat", map);
   return files;
 }
+
+export function npcLine(
+  overrides: {
+    name?: string;
+    id?: number;
+    mapType?: number;
+    floor?: number;
+    x?: number;
+    y?: number;
+    image?: number;
+    direction?: number;
+  } = {},
+) {
+  const n = {
+    name: "原創測試嚮導",
+    id: 7,
+    mapType: 0,
+    floor: 100,
+    x: 2,
+    y: 2,
+    image: 900,
+    direction: 6,
+    ...overrides,
+  };
+  return [
+    "Guide",
+    n.name,
+    0,
+    n.id,
+    0,
+    1,
+    1,
+    n.mapType,
+    n.floor,
+    n.x,
+    n.y,
+    n.x,
+    n.y,
+    n.x,
+    n.y,
+    n.x,
+    n.y,
+    1,
+    1000,
+    n.direction,
+    n.image,
+    0,
+    1,
+    0,
+    "",
+  ].join("\t");
+}
+export function npcResources() {
+  const files = syntheticResources();
+  const info = new Uint8Array(160),
+    old = files.get("Assets/bin/Graphic_1.bin")!;
+  info.set(files.get("Assets/bin/GraphicInfo_1.bin")!);
+  const first = graphicBytes(20, 36, 17),
+    second = graphicBytes(20, 36, 16);
+  for (let row = 2; row < 4; row++) {
+    const entry = infoBytes(
+      900 + row - 2,
+      old.length + (row - 2) * first.length,
+      first.length,
+      20,
+      36,
+    );
+    const view = new DataView(entry.buffer);
+    view.setInt32(0, 500 + row - 2, true);
+    view.setInt32(12, -10, true);
+    view.setInt32(16, -36, true);
+    info.set(entry, row * 40);
+  }
+  const data = new Uint8Array(old.length + first.length + second.length);
+  data.set(old);
+  data.set(first, old.length);
+  data.set(second, old.length + first.length);
+  files.set("Assets/bin/GraphicInfo_1.bin", info);
+  files.set("Assets/bin/Graphic_1.bin", data);
+  const animeInfo = new Uint8Array(12),
+    index = new DataView(animeInfo.buffer);
+  index.setInt32(0, 100900, true);
+  index.setInt16(8, 1, true);
+  const anime = new Uint8Array(32),
+    header = new DataView(anime.buffer);
+  header.setInt16(0, 6, true);
+  header.setInt16(2, 0, true);
+  header.setInt32(4, 400, true);
+  header.setInt32(8, 2, true);
+  header.setInt32(12, 500, true);
+  header.setInt32(22, 501, true);
+  files.set("Assets/bin/AnimeInfo_1.bin", animeInfo);
+  files.set("Assets/bin/Anime_1.bin", anime);
+  files.set(
+    "npc.txt",
+    new TextEncoder().encode(
+      [
+        npcLine(),
+        npcLine({ name: "動畫嚮導", id: 8, x: 4, image: 100900 }),
+        npcLine({ name: "缺少造型", id: 9, x: 6, image: 777777 }),
+        npcLine({ name: "", id: 10, x: 8, image: 0 }),
+        npcLine({ name: "另一圖", id: 11, floor: 200, x: 1, y: 1 }),
+        npcLine({ name: "超界", id: 12, x: 100 }),
+        npcLine({ name: "另一類型", id: 13, mapType: 1 }),
+      ].join("\n"),
+    ),
+  );
+  return files;
+}

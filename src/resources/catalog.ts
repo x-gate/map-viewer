@@ -10,6 +10,7 @@ export interface ResourceSet {
 export interface Catalog {
   root: string;
   sets: ResourceSet[];
+  animes: ResourceSet[];
   palettes: ResourceFile[];
   maps: ResourceFile[];
   warnings: string[];
@@ -27,15 +28,31 @@ export function discover(files: ResourceFile[], root: string): Catalog {
     byPath.set(key, entry);
   }
   const sets: ResourceSet[] = [];
+  const animes: ResourceSet[] = [];
   const warnings: string[] = [];
   for (const entry of relevant) {
-    const match = entry.path.match(/^assets\/bin\/graphicinfo(.*)\.bin$/i);
+    const match = entry.path.match(
+      /^(assets\/bin\/(?:.*\/)?)(graphic|anime)info([^/]*)\.bin$/i,
+    );
     if (!match) continue;
-    const data = byPath.get(`assets/bin/graphic${match[1]}.bin`.toLowerCase());
-    if (data) sets.push({ name: `Graphic${match[1]}`, info: entry, data });
+    const data = byPath.get(
+      `${match[1]}${match[2]}${match[3]}.bin`.toLowerCase(),
+    );
+    const list = match[2].toLowerCase() === "graphic" ? sets : animes;
+    if (data)
+      list.push({
+        name: data.path.replace(/^assets\/bin\//i, "").replace(/\.bin$/i, ""),
+        info: entry,
+        data,
+      });
     else warnings.push(`${entry.file.name} 缺少配對的圖像檔。`);
   }
   sets.sort(
+    (a, b) =>
+      Number(/ex/i.test(a.name)) - Number(/ex/i.test(b.name)) ||
+      compare(a.name, b.name),
+  );
+  animes.sort(
     (a, b) =>
       Number(/ex/i.test(a.name)) - Number(/ex/i.test(b.name)) ||
       compare(a.name, b.name),
@@ -55,7 +72,7 @@ export function discover(files: ResourceFile[], root: string): Catalog {
     throw new Error(
       `找不到必要資源：${missing.join("、")}。請選擇包含 Assets 的遊戲根目錄。`,
     );
-  return { root, sets, palettes, maps, warnings };
+  return { root, sets, animes, palettes, maps, warnings };
 }
 export function fromFileList(files: FileList | File[]): {
   root: string;

@@ -31,7 +31,7 @@ export async function scanDirectory(
         )
           await walk(entry as DirectoryHandle, next);
       } else if (
-        /^assets\/bin\/(graphic(?:info)?.*\.bin|pal\/[^/]+\.cgp)$/i.test(
+        /^assets\/bin\/(?:(?:.*\/)?(?:graphic|anime)(?:info)?[^/]*\.bin|pal\/[^/]+\.cgp)$/i.test(
           next,
         ) ||
         /^assets\/map\/.+\.dat$/i.test(next)

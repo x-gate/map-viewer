@@ -1,10 +1,13 @@
 import { initialize, parser } from "./wasm";
 import { CandidateLibrary } from "./candidates";
 import { ResourceSession } from "./session";
+import { readNpcs } from "./npc";
+import { NpcResources } from "./npc-appearance";
 import type { Request, Result } from "./protocol";
 const ready = initialize();
 const session = new ResourceSession(parser);
 const candidates = new CandidateLibrary(parser);
+const npcs = new NpcResources(parser);
 // Serialize file reads and WASM calls; the client terminates this worker on resource changes.
 let queue = Promise.resolve();
 self.onmessage = ({ data }: MessageEvent<{ id: number; request: Request }>) => {
@@ -33,6 +36,18 @@ self.onmessage = ({ data }: MessageEvent<{ id: number; request: Request }>) => {
         const decoded = await candidates.decode(request.ref);
         result = { kind: "candidate-decode", ...decoded };
         transfer.push(decoded.tile.rgba.buffer);
+      } else if (request.kind === "npc-file") {
+        result = {
+          kind: "npc-file",
+          value: await readNpcs(request.file, request.encoding),
+        };
+      } else if (request.kind === "npc-init") {
+        await npcs.initialize(request.graphic, request.anime, request.palette);
+        result = { kind: "npc-init" };
+      } else if (request.kind === "npc-appearance") {
+        const value = await npcs.appearance(request.image, request.direction);
+        result = { kind: "npc-appearance", value };
+        transfer.push(...value.images.map((image) => image.rgba.buffer));
       } else {
         result = { kind: "tiles", tiles: [], errors: [] };
         for (const mapId of request.ids.slice(0, 32)) {
